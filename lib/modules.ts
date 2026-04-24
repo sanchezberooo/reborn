@@ -14,8 +14,9 @@ export type ActionType =
   | { type: 'ADD_MODULE'; payload: { id: string; name: string; icon: string; color: string; data?: Record<string, unknown> } }
   | { type: 'REMOVE_MODULE'; payload: { id: string } }
   | { type: 'UPDATE_MODULE_DATA'; payload: { id: string; patch: Record<string, unknown> } }
+  | { type: 'ADD_ITEM_TO_FIELD'; payload: { id: string; field: string; item: unknown } }
 
-const DEFAULT_MODULES: ModuleItem[] = [
+export const DEFAULT_MODULES: ModuleItem[] = [
   {
     id: 'scholarship',
     name: 'Burs & Üniversite',
@@ -148,6 +149,19 @@ export function executeAction(action: ActionType): ModuleItem[] {
       const updated = modules.map((m) =>
         m.id === action.payload.id
           ? { ...m, data: { ...m.data, ...action.payload.patch }, updatedAt: now }
+          : m
+      )
+      saveModules(updated)
+      return updated
+    }
+    case 'ADD_ITEM_TO_FIELD': {
+      const mod = modules.find((m) => m.id === action.payload.id)
+      if (!mod) return modules
+      const existing = (mod.data[action.payload.field] as unknown[]) ?? []
+      const patch = { [action.payload.field]: [...existing, action.payload.item] }
+      const updated = modules.map((m) =>
+        m.id === action.payload.id
+          ? { ...m, data: { ...m.data, ...patch }, updatedAt: now }
           : m
       )
       saveModules(updated)

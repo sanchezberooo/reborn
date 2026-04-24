@@ -18,28 +18,33 @@ Kişiliğin:
 const MODULE_INSTRUCTIONS = `
 
 ## Modül Yönetimi:
-Dashboard'daki modüllere erişip değiştirebilirsin.
-Bir modül işlemi gerektiğinde, cevabının SONUNA şu bloğu ekle (kullanıcı arayüzünde görünmez, sistem tarafından işlenir):
+Yukarıdaki modüllerin tüm içeriğini görüyorsun. Bu verileri okuyarak Bero'ya bilgi verebilir, istediğin alanı güncelleyebilirsin.
+
+Bir modül işlemi gerektiğinde, cevabının SONUNA tek bir aksiyon bloğu ekle (kullanıcı arayüzünde görünmez, sistem işler):
 
 <REBORN_ACTION>{"type":"TİP","payload":{...}}</REBORN_ACTION>
 
-Desteklenen tipler:
+### Desteklenen aksiyonlar:
 
-ADD_MODULE — yeni modül ekle:
+Yeni modül oluştur:
 <REBORN_ACTION>{"type":"ADD_MODULE","payload":{"id":"fitness","name":"Fitness","icon":"💪","color":"#6ec88e","data":{}}}</REBORN_ACTION>
 
-REMOVE_MODULE — modül sil:
+Modül sil:
 <REBORN_ACTION>{"type":"REMOVE_MODULE","payload":{"id":"fitness"}}</REBORN_ACTION>
 
-UPDATE_MODULE_DATA — modül verisini güncelle (mevcut data'ya merge edilir):
-<REBORN_ACTION>{"type":"UPDATE_MODULE_DATA","payload":{"id":"english","patch":{"ielts_target":"7.5"}}}</REBORN_ACTION>
+Modül alanını güncelle (skalar değerler için — mevcut data'ya merge edilir):
+<REBORN_ACTION>{"type":"UPDATE_MODULE_DATA","payload":{"id":"english","patch":{"ielts_target":"7.5","level":"B2+"}}}</REBORN_ACTION>
 
-Kurallar:
-- Sadece TEK bir action bloğu ekle
-- JSON geçerli olmalı — hatalı JSON ekleme
-- Zaten var olan bir modülü ADD_MODULE ile ekleme
+Diziye eleman ekle (universities, tasks, habits, workouts gibi listeler için):
+<REBORN_ACTION>{"type":"ADD_ITEM_TO_FIELD","payload":{"id":"scholarship","field":"universities","item":{"name":"Berea College","country":"ABD","notes":"Full scholarship - need-blind"}}}</REBORN_ACTION>
+
+### Kurallar:
+- Sadece TEK bir aksiyon bloğu ekle
+- JSON geçerli olmalı — hatalı JSON yazma
+- Diziye eleman eklerken ADD_ITEM_TO_FIELD kullan, UPDATE_MODULE_DATA değil
+- Var olan bir modülü ADD_MODULE ile ekleme
 - Var olmayan bir modülü silmeye/güncellemeye çalışma
-- Action bloğunu cevabın geri kalanından SONRA ekle`
+- Aksiyon bloğunu cevabının en SONUNA ekle`
 
 export function buildSystemPrompt(
   profile: BeroProfile,
@@ -70,9 +75,19 @@ ${memories
     modules.length > 0
       ? `
 
-## Mevcut Modüller (id → name):
-${modules.map((m) => `- ${m.id}: ${m.name}`).join('\n')}`
-      : ''
+## Kullanıcının Mevcut Modülleri (tam veri):
+Bu modüllere erişebilir, güncelleyebilir, yeni modül oluşturabilirsin.
+
+${modules
+  .map(
+    (m) =>
+      `[${m.id}] ${m.name} ${m.icon}\n${JSON.stringify(m.data)}`
+  )
+  .join('\n\n')}`
+      : `
+
+## Modüller:
+Henüz modül yok. Bero isterse oluşturabilirsin.`
 
   return (
     SANCHEZ_BASE +

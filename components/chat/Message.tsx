@@ -8,34 +8,32 @@ interface Props {
 export default function MessageBubble({ message, isStreaming }: Props) {
   const isUser = message.role === 'user'
 
-  return (
-    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-      {/* Avatar */}
-      <div
-        className={`
-          shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold
-          ${isUser
-            ? 'bg-surface-3 text-foreground'
-            : 'bg-gold text-background font-display'
-          }
-        `}
-      >
-        {isUser ? 'B' : 'S'}
+  if (isUser) {
+    return (
+      <div className="flex justify-end py-1.5">
+        <div className="max-w-[72%] bg-surface-2 border border-border/60 text-foreground text-sm leading-relaxed px-4 py-3 rounded-2xl rounded-br-sm">
+          <p className="whitespace-pre-wrap">{message.content}</p>
+        </div>
       </div>
+    )
+  }
 
-      {/* Bubble */}
-      <div
-        className={`
-          max-w-[75%] px-4 py-3 rounded-2xl text-sm leading-relaxed
-          ${isUser
-            ? 'bg-surface-2 text-foreground rounded-tr-sm'
-            : 'bg-surface text-foreground rounded-tl-sm border border-border'
-          }
-        `}
-      >
+  return (
+    <div className="flex gap-3 py-1.5">
+      <div className="shrink-0 w-7 h-7 rounded-full bg-gold/15 border border-gold/30 flex items-center justify-center mt-0.5">
+        <span className="text-gold text-xs font-bold font-display">S</span>
+      </div>
+      <div className="flex-1 min-w-0 text-sm text-foreground/90 leading-7 pt-0.5">
         <p className="whitespace-pre-wrap">{message.content}</p>
-        {isStreaming && (
-          <span className="inline-block w-1.5 h-4 bg-gold ml-0.5 animate-pulse rounded-sm align-middle" />
+        {isStreaming && message.content === '' && (
+          <span className="inline-flex gap-1 items-center h-5">
+            <span className="w-1.5 h-1.5 rounded-full bg-gold/60 animate-bounce" style={{ animationDelay: '0ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-gold/60 animate-bounce" style={{ animationDelay: '150ms' }} />
+            <span className="w-1.5 h-1.5 rounded-full bg-gold/60 animate-bounce" style={{ animationDelay: '300ms' }} />
+          </span>
+        )}
+        {isStreaming && message.content !== '' && (
+          <span className="inline-block w-1.5 h-4 bg-gold/60 ml-0.5 animate-pulse rounded-sm align-middle" />
         )}
       </div>
     </div>

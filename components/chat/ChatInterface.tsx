@@ -2,20 +2,46 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Message } from '@/lib/types'
-import type { BeroProfile, Memory } from '@/lib/memory'
+import type { BeroProfile } from '@/lib/memory'
+import type { Memory } from '@/lib/memory'
 import type { ModuleItem } from '@/lib/modules'
-import { loadProfile, loadMemories, saveMemory, DEFAULT_PROFILE } from '@/lib/memory'
-import { loadModules, executeAction, parseAction } from '@/lib/modules'
+import { DEFAULT_PROFILE } from '@/lib/memory'
+import { parseAction, executeAction } from '@/lib/modules'
+import {
+  dbLoadProfile,
+  dbLoadMemories,
+  dbSaveMemory,
+  dbLoadModules,
+  dbExecuteAction,
+  dbSaveMessage,
+} from '@/lib/db'
 import MessageBubble from './Message'
 
 function randomId() {
   return Math.random().toString(36).slice(2, 9)
 }
 
-interface ActionToast {
-  id: string
-  text: string
+// Strips complete + partial <REBORN_ACTION> tags from streamed content
+function stripAction(raw: string): string {
+  let s = raw
+    .replace(/<REBORN_ACTION>[\s\S]*?<\/REBORN_ACTION>/g, '')   // complete tag
+    .replace(/<REBORN_ACTION>[\s\S]*$/, '')                      // opened, not yet closed
+  // Strip any partial prefix of '<REBORN_ACTION>' at end of string
+  const TAG = '<REBORN_ACTION>'
+  for (let len = TAG.length - 1; len >= 1; len--) {
+    if (s.endsWith(TAG.slice(0, len))) {
+      s = s.slice(0, s.length - len)
+      break
+    }
+  }
+  return s.trim()
 }
+
+const SUGGESTIONS = [
+  'Bugün ne yapmalıyım?',
+  'IELTS hazırlığımı değerlendir',
+  'Burs başvuru takvimini güncelle',
+]
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([])
@@ -25,24 +51,30 @@ export default function ChatInterface() {
   const [profile, setProfile] = useState<BeroProfile>(DEFAULT_PROFILE)
   const [memories, setMemories] = useState<Memory[]>([])
   const [modules, setModules] = useState<ModuleItem[]>([])
-  const [toasts, setToasts] = useState<ActionToast[]>([])
+  const [toasts, setToasts] = useState<{ id: string; text: string }[]>([])
+  const [dataLoading, setDataLoading] = useState(true)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const sessionIdRef = useRef<string>(crypto.randomUUID())
 
   useEffect(() => {
-    setProfile(loadProfile())
-    setMemories(loadMemories())
-    const mods = loadModules()
-    setModules(mods)
-
-    // ?module=id parametresi varsa input'u ön-doldur
-    const params = new URLSearchParams(window.location.search)
-    const moduleId = params.get('module')
-    if (moduleId) {
-      const mod = mods.find((m) => m.id === moduleId)
-      if (mod) setInput(`${mod.name} modülü hakkında ne yapmalıyım?`)
+    async function load() {
+      try {
+        const [prof, mems, mods] = await Promise.all([
+          dbLoadProfile(),
+          dbLoadMemories(),
+          dbLoadModules(),
+        ])
+        setProfile(prof)
+        setMemories(mems)
+        setModules(mods)
+      } catch {}
+      finally {
+        setDataLoading(false)
+      }
     }
+    load()
   }, [])
 
   useEffect(() => {
@@ -51,109 +83,75 @@ export default function ChatInterface() {
 
   function showToast(text: string) {
     const id = randomId()
-    setToasts((prev) => [...prev, { id, text }])
-    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 3000)
+    setToasts((p) => [...p, { id, text }])
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3000)
   }
 
-  const finalizeMessage = useCallback(
-    (assistantId: string, rawContent: string) => {
-      const { clean, action } = parseAction(rawContent)
+  const finalizeMessage = useCallback(async (
+    assistantId: string,
+    rawContent: string,
+    sessionId: string,
+  ) => {
+    const { clean, action } = parseAction(rawContent)
+    // Show clean text (no action tags)
+    setMessages((p) => p.map((m) => m.id === assistantId ? { ...m, content: clean } : m))
+    await dbSaveMessage(sessionId, 'assistant', clean).catch(() => {})
 
-      // Temizlenmiş metni mesaja yaz
-      setMessages((prev) =>
-        prev.map((m) => (m.id === assistantId ? { ...m, content: clean } : m))
-      )
+    if (action) {
+      // 1. localStorage — always works, immediate UI update
+      const updated = executeAction(action)
+      setModules(updated)
+      window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
 
-      // Action varsa çalıştır
-      if (action) {
-        const updated = executeAction(action)
-        setModules(updated)
-
-        const labels: Record<string, string> = {
-          ADD_MODULE: '+ Modül eklendi',
-          REMOVE_MODULE: '− Modül silindi',
-          UPDATE_MODULE_DATA: '✎ Modül güncellendi',
-        }
-        showToast(labels[action.type] ?? 'Modül değiştirildi')
-
-        // Dashboard'ın yeniden yükleyebilmesi için event at
-        window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
+      const labels: Record<string, string> = {
+        ADD_MODULE: '+ Modül eklendi',
+        REMOVE_MODULE: '− Modül silindi',
+        UPDATE_MODULE_DATA: '✎ Modül güncellendi',
+        ADD_ITEM_TO_FIELD: '+ Eklendi',
       }
-    },
-    []
-  )
+      showToast(labels[action.type] ?? 'Kaydedildi')
+
+      // 2. Supabase sync in background — best effort
+      dbExecuteAction(action).catch(() => {})
+    }
+  }, [])
 
   async function send() {
     const text = input.trim()
     if (!text || loading) return
 
-    const userMsg: Message = {
-      id: randomId(),
-      role: 'user',
-      content: text,
-      timestamp: new Date(),
-    }
-    const assistantId = randomId()
-    const assistantMsg: Message = {
-      id: assistantId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-    }
+    const sessionId = sessionIdRef.current
+    const userMsg: Message = { id: randomId(), role: 'user', content: text, timestamp: new Date() }
+    const aId = randomId()
+    const assistantMsg: Message = { id: aId, role: 'assistant', content: '', timestamp: new Date() }
 
-    setMessages((prev) => [...prev, userMsg, assistantMsg])
+    setMessages((p) => [...p, userMsg, assistantMsg])
     setInput('')
     setLoading(true)
-
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    dbSaveMessage(sessionId, 'user', text).catch(() => {})
 
-    let fullContent = ''
-
+    let full = ''
     try {
-      const history = [...messages, userMsg].map((m) => ({
-        role: m.role,
-        content: m.content,
-      }))
-
+      const history = [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }))
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: history, profile, memories, modules }),
       })
-
-      if (!res.body) throw new Error('No response body')
-
+      if (!res.body) throw new Error('no body')
       const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-
+      const dec = new TextDecoder()
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        const chunk = decoder.decode(value, { stream: true })
-        fullContent += chunk
-
-        // Streaming sırasında action tag'ini gizle ama metni göster
-        const displayContent = fullContent
-          .replace(/<REBORN_ACTION>[\s\S]*?<\/REBORN_ACTION>/g, '')
-          .replace(/<REBORN_ACTION>[\s\S]*$/, '') // henüz kapanmamış tag
-          .trim()
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantId ? { ...m, content: displayContent } : m
-          )
-        )
+        full += dec.decode(value, { stream: true })
+        setMessages((p) => p.map((m) => m.id === aId ? { ...m, content: stripAction(full) } : m))
       }
-
-      // Stream bitti — action'ı işle
-      finalizeMessage(assistantId, fullContent)
+      await finalizeMessage(aId, full, sessionId)
     } catch {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId
-            ? { ...m, content: 'Bir hata oluştu. Tekrar dene.' }
-            : m
-        )
+      setMessages((p) =>
+        p.map((m) => m.id === aId ? { ...m, content: 'Bir hata oluştu. Tekrar dene.' } : m)
       )
     } finally {
       setLoading(false)
@@ -161,7 +159,7 @@ export default function ChatInterface() {
   }
 
   async function newChat() {
-    if (messages.length < 2 || summarizing) return
+    if (messages.length < 1 || summarizing) return
     setSummarizing(true)
     try {
       const history = messages.map((m) => ({ role: m.role, content: m.content }))
@@ -172,14 +170,14 @@ export default function ChatInterface() {
       })
       const { summary } = await res.json()
       if (summary) {
-        saveMemory(summary)
-        setMemories(loadMemories())
+        await dbSaveMemory(summary)
+        setMemories(await dbLoadMemories())
       }
-    } catch {
-      // özet alınamazsa yine de sohbeti temizle
-    } finally {
+    } catch {}
+    finally {
       setSummarizing(false)
       setMessages([])
+      sessionIdRef.current = crypto.randomUUID()
     }
   }
 
@@ -194,124 +192,155 @@ export default function ChatInterface() {
     setInput(e.target.value)
     const el = e.target
     el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 160) + 'px'
+    el.style.height = Math.min(el.scrollHeight, 200) + 'px'
   }
 
-  const memoryCount = memories.length
+  function pickSuggestion(s: string) {
+    setInput(s)
+    textareaRef.current?.focus()
+  }
+
+  if (dataLoading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="flex gap-1.5">
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="w-1.5 h-1.5 rounded-full bg-gold/50 animate-bounce"
+              style={{ animationDelay: `${i * 120}ms` }}
+            />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const isEmpty = messages.length === 0
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="shrink-0 px-6 py-4 border-b border-border flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-gold flex items-center justify-center text-background text-sm font-semibold font-display">
-            S
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-foreground">Sanchez</p>
-            <p className="text-xs text-muted">
-              {memoryCount > 0 ? `${memoryCount} sohbet hatırlıyor` : 'AI Mentor · Online'}
-            </p>
-          </div>
-        </div>
-
-        {messages.length > 0 && (
-          <button
-            onClick={newChat}
-            disabled={summarizing}
-            className="text-xs text-muted border border-border rounded-lg px-3 py-1.5 hover:text-foreground hover:border-gold transition-colors disabled:opacity-40"
-          >
-            {summarizing ? 'Kaydediliyor...' : 'Yeni Sohbet'}
-          </button>
-        )}
-      </div>
+    <div className="flex flex-col h-full bg-background">
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-4">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
-            <div className="w-14 h-14 rounded-full bg-surface-2 border border-border flex items-center justify-center">
-              <span className="font-display text-gold text-xl font-semibold">S</span>
-            </div>
-            <div>
-              <p className="font-display text-xl text-foreground mb-1">Sanchez hazır</p>
-              <p className="text-muted text-sm max-w-xs">
-                {memoryCount > 0
-                  ? `${profile.name}'yu tanıyorum. Geçen seferden devam edelim mi?`
-                  : 'Burs hedeflerin, modüller, kod — ne istersen konuşalım.'}
-              </p>
+      <div className="flex-1 overflow-y-auto">
+        {isEmpty ? (
+          <div className="flex flex-col items-center justify-center h-full gap-7 px-6">
+            {/* Avatar + greeting */}
+            <div className="flex flex-col items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-gold/10 border border-gold/20 flex items-center justify-center">
+                <span className="font-display text-gold text-2xl font-bold select-none">S</span>
+              </div>
+              <div className="text-center">
+                <p className="text-foreground font-semibold text-lg leading-tight">
+                  {memories.length > 0 ? `Hoş geldin, ${profile.name}` : 'Sanchez hazır'}
+                </p>
+                <p className="text-muted text-sm mt-1">
+                  {memories.length > 0
+                    ? `${memories.length} sohbet hafızamda`
+                    : 'Ne konuşmak istiyorsun?'}
+                </p>
+              </div>
             </div>
 
-            {memoryCount > 0 && (
-              <div className="w-full max-w-sm bg-surface border border-border rounded-xl p-3 text-left">
-                <p className="text-xs text-gold mb-2 font-medium">Son sohbet özeti</p>
-                <p className="text-xs text-muted leading-relaxed">{memories[0].summary}</p>
-                <p className="text-[10px] text-muted mt-1 opacity-50">{memories[0].date}</p>
+            {/* Last memory */}
+            {memories.length > 0 && (
+              <div className="w-full max-w-md bg-surface border border-border rounded-2xl p-4">
+                <p className="text-[11px] text-gold font-medium mb-2 uppercase tracking-wide">Son özet</p>
+                <p className="text-sm text-muted leading-relaxed">{memories[0].summary}</p>
+                <p className="text-[11px] text-muted/40 mt-2">{memories[0].date}</p>
               </div>
             )}
 
-            <div className="flex flex-col gap-2 mt-1 w-full max-w-sm">
-              {[
-                'Fitness modülü ekle',
-                'IELTS hedefimi 7.5 yap',
-                'Bugün ne yapmalıyım?',
-              ].map((s) => (
+            {/* Suggestions */}
+            <div className="flex flex-col gap-2 w-full max-w-md">
+              {SUGGESTIONS.map((s) => (
                 <button
                   key={s}
-                  onClick={() => { setInput(s); textareaRef.current?.focus() }}
-                  className="text-left text-sm text-muted border border-border rounded-xl px-4 py-3 hover:border-gold hover:text-foreground transition-colors bg-surface"
+                  onClick={() => pickSuggestion(s)}
+                  className="text-left text-sm text-muted bg-surface border border-border rounded-xl px-4 py-3 hover:border-gold/40 hover:text-foreground transition-all duration-150"
                 >
                   {s}
                 </button>
               ))}
             </div>
           </div>
+        ) : (
+          <div className="max-w-3xl mx-auto w-full px-5 pt-8 pb-2">
+            {messages.map((msg, i) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                isStreaming={loading && i === messages.length - 1 && msg.role === 'assistant'}
+              />
+            ))}
+            <div ref={bottomRef} />
+          </div>
         )}
-
-        {messages.map((msg, i) => (
-          <MessageBubble
-            key={msg.id}
-            message={msg}
-            isStreaming={loading && i === messages.length - 1 && msg.role === 'assistant'}
-          />
-        ))}
-        <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="shrink-0 px-4 pb-4 pt-2">
-        <div className="flex items-end gap-2 bg-surface-2 border border-border rounded-2xl px-4 py-3 focus-within:border-gold transition-colors">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={handleInput}
-            onKeyDown={handleKeyDown}
-            placeholder="Sanchez'e yaz..."
-            rows={1}
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted resize-none outline-none leading-relaxed"
-            style={{ maxHeight: '160px' }}
-          />
-          <button
-            onClick={send}
-            disabled={!input.trim() || loading}
-            className="shrink-0 w-8 h-8 rounded-xl bg-gold flex items-center justify-center transition-opacity disabled:opacity-30 hover:opacity-80"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-background -rotate-90">
-              <path d="M12 19V5M5 12l7-7 7 7" />
-            </svg>
-          </button>
+      {/* Input area */}
+      <div className="shrink-0 px-4 pb-5 pt-3">
+        <div className="max-w-3xl mx-auto w-full">
+
+          {/* New chat button */}
+          {!isEmpty && (
+            <div className="flex justify-end mb-2.5">
+              <button
+                onClick={newChat}
+                disabled={summarizing}
+                className="text-xs text-muted hover:text-foreground disabled:opacity-40 transition-colors flex items-center gap-1.5 group"
+              >
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="group-hover:stroke-gold transition-colors">
+                  <path d="M12 5v14M5 12l7-7 7 7" />
+                </svg>
+                {summarizing ? 'Kaydediliyor...' : 'Yeni sohbet'}
+              </button>
+            </div>
+          )}
+
+          {/* Input box */}
+          <div className="flex items-end gap-3 bg-surface border border-border rounded-2xl px-4 py-3 focus-within:border-gold/40 transition-colors duration-150 shadow-xl shadow-black/30">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              placeholder="Sanchez'e yaz..."
+              rows={1}
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted/60 resize-none outline-none leading-relaxed py-0.5"
+              style={{ maxHeight: '200px' }}
+            />
+            <button
+              onClick={send}
+              disabled={!input.trim() || loading}
+              className="shrink-0 w-8 h-8 rounded-xl bg-gold flex items-center justify-center transition-all duration-150 disabled:opacity-25 hover:opacity-75 active:scale-95"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                className="text-background -rotate-90"
+              >
+                <path d="M12 19V5M5 12l7-7 7 7" />
+              </svg>
+            </button>
+          </div>
+
+          <p className="text-center text-[10px] text-muted/40 mt-2">
+            Enter — gönder · Shift+Enter — yeni satır
+          </p>
         </div>
-        <p className="text-center text-[10px] text-muted mt-2">
-          Enter — gönder · Shift+Enter — yeni satır
-        </p>
       </div>
 
-      {/* Action toasts */}
-      <div className="fixed bottom-20 right-4 flex flex-col gap-2 pointer-events-none z-50">
+      {/* Toasts */}
+      <div className="fixed bottom-24 right-5 flex flex-col gap-2 pointer-events-none z-50">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className="bg-surface-2 border border-gold/30 text-gold text-xs px-3 py-2 rounded-lg shadow-lg animate-fade-in"
+            className="bg-surface border border-gold/25 text-gold text-xs px-3 py-2 rounded-lg shadow-xl"
           >
             {t.text}
           </div>
