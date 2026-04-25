@@ -6,7 +6,8 @@ import type { BeroProfile } from '@/lib/memory'
 import type { Memory } from '@/lib/memory'
 import type { ModuleItem } from '@/lib/modules'
 import { DEFAULT_PROFILE } from '@/lib/memory'
-import { parseAction, executeAction } from '@/lib/modules'
+import { executeAction, loadModules } from '@/lib/modules'
+import type { ActionType } from '@/lib/modules'
 import { saveMemory } from '@/lib/memory'
 import {
   dbLoadProfile,
@@ -14,7 +15,6 @@ import {
   dbSaveMemory,
   dbLoadModules,
   dbExecuteAction,
-  dbSaveMessage,
   dbSaveConversation,
   dbLoadConversations,
   dbLoadConversation,
@@ -24,6 +24,21 @@ import MessageBubble from './Message'
 
 function randomId() {
   return Math.random().toString(36).slice(2, 9)
+}
+
+// Executes every REBORN_ACTION in text (localStorage) and returns cleaned display string
+function cleanResponse(text: string): string {
+  const actionRegex = /<REBORN_ACTION>([\s\S]*?)<\/REBORN_ACTION>/g
+  let match
+  while ((match = actionRegex.exec(text)) !== null) {
+    try {
+      const action = JSON.parse(match[1]) as ActionType
+      executeAction(action)
+    } catch (e) {
+      console.error('Action parse error:', e)
+    }
+  }
+  return text.replace(/<REBORN_ACTION>[\s\S]*?<\/REBORN_ACTION>/g, '').trim()
 }
 
 function stripAction(raw: string): string {
@@ -60,7 +75,7 @@ export default function ChatInterface() {
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const sessionIdRef = useRef<string>(crypto.randomUUID())
+  const conversationIdRef = useRef<string | null>(null)
   const newChatRef = useRef<() => void>(() => {})
 
   useEffect(() => {
@@ -75,12 +90,27 @@ export default function ChatInterface() {
         setMemories(mems)
         setModules(mods)
 
-        // Load last conversation for cross-session context
-        const convs = await dbLoadConversations().catch(() => [])
-        if (convs.length > 0) {
-          const msgs = await dbLoadConversation(convs[0].id).catch(() => null)
+        // Restore active conversation from localStorage
+        const savedId = localStorage.getItem('reborn:active-conversation')
+        if (savedId) {
+          conversationIdRef.current = savedId
+          const msgs = await dbLoadConversation(savedId).catch(() => null)
           if (msgs && msgs.length > 0) {
-            setLastConversation(msgs.slice(-8))
+            setMessages(msgs.map((m) => ({
+              id: randomId(),
+              role: m.role as 'user' | 'assistant',
+              content: m.content,
+              timestamp: new Date(),
+            })))
+          }
+        } else {
+          // No active conversation — load last one for cross-session context
+          const convs = await dbLoadConversations().catch(() => [])
+          if (convs.length > 0) {
+            const msgs = await dbLoadConversation(convs[0].id).catch(() => null)
+            if (msgs && msgs.length > 0) {
+              setLastConversation(msgs.slice(-8))
+            }
           }
         }
       } catch {} finally {
@@ -111,7 +141,8 @@ export default function ChatInterface() {
         timestamp: new Date(),
       }))
       setMessages(loaded)
-      sessionIdRef.current = crypto.randomUUID()
+      conversationIdRef.current = id
+      localStorage.setItem('reborn:active-conversation', id)
     }
     window.addEventListener('reborn:load-conversation', handler)
     return () => window.removeEventListener('reborn:load-conversation', handler)
@@ -128,43 +159,25 @@ export default function ChatInterface() {
   }
 
   const finalizeMessage = useCallback(async (
-    assistantId: string,
-    rawContent: string,
     sessionId: string,
     completedMessages: Message[],
   ) => {
-    const { clean, action } = parseAction(rawContent)
-    setMessages((p) => p.map((m) => m.id === assistantId ? { ...m, content: clean } : m))
-    await dbSaveMessage(sessionId, 'assistant', clean).catch(() => {})
-
-    // Auto-save full conversation to Supabase after every assistant response
     const title = completedMessages.find((m) => m.role === 'user')?.content.slice(0, 80) ?? 'Sohbet'
     const msgList = completedMessages.map((m) => ({ role: m.role, content: m.content }))
-    dbSaveConversation(sessionId, title, msgList).catch(() => {})
+    await dbSaveConversation(sessionId, title, msgList).catch(() => {})
     window.dispatchEvent(new CustomEvent('reborn:conversation-saved'))
-
-    if (action) {
-      const updated = executeAction(action)
-      setModules(updated)
-      window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
-
-      const labels: Record<string, string> = {
-        ADD_MODULE: '+ Modül eklendi',
-        REMOVE_MODULE: '− Modül silindi',
-        UPDATE_MODULE_DATA: '✎ Modül güncellendi',
-        ADD_ITEM_TO_FIELD: '+ Eklendi',
-      }
-      showToast(labels[action.type] ?? 'Kaydedildi')
-
-      dbExecuteAction(action).catch(() => {})
-    }
   }, [])
 
   async function send() {
     const text = input.trim()
     if (!text || loading) return
 
-    const sessionId = sessionIdRef.current
+    // Lazily create conversation ID on first message, persist across page loads
+    if (!conversationIdRef.current) {
+      conversationIdRef.current = crypto.randomUUID()
+      localStorage.setItem('reborn:active-conversation', conversationIdRef.current)
+    }
+    const sessionId = conversationIdRef.current
     const userMsg: Message = { id: randomId(), role: 'user', content: text, timestamp: new Date() }
     const aId = randomId()
     const assistantMsg: Message = { id: aId, role: 'assistant', content: '', timestamp: new Date() }
@@ -173,7 +186,12 @@ export default function ChatInterface() {
     setInput('')
     setLoading(true)
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
-    dbSaveMessage(sessionId, 'user', text).catch(() => {})
+
+    // Immediately create conversation so sidebar updates before response arrives
+    if (messages.length === 0) {
+      dbSaveConversation(sessionId, text.slice(0, 40), [{ role: 'user', content: text }]).catch(() => {})
+      window.dispatchEvent(new CustomEvent('reborn:conversation-saved'))
+    }
 
     let full = ''
     try {
@@ -199,16 +217,52 @@ export default function ChatInterface() {
         full += dec.decode(value, { stream: true })
         setMessages((p) => p.map((m) => m.id === aId ? { ...m, content: stripAction(full) } : m))
       }
+      // Flush remaining bytes then log tail for debugging
+      full += dec.decode()
+      console.log('[Reborn] response tail:', full.slice(-200))
 
-      // Build the completed message list for saving
-      const { clean } = parseAction(full)
+      // 1. Execute all actions + get clean display text
+      const clean = cleanResponse(full)
+
+      // 2. Update display — no tags
+      setMessages((p) => p.map((m) => m.id === aId ? { ...m, content: clean } : m))
+
+      // 3. Refresh modules state from localStorage (executeAction already wrote it)
+      setModules(loadModules())
+      window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
+
+      // 4. Supabase sync + toast for each action found
+      const syncRegex = /<REBORN_ACTION>([\s\S]*?)<\/REBORN_ACTION>/g
+      const actionLabels: Record<string, string> = {
+        CREATE_MODULE: '✅ Modül oluşturuldu',
+        ADD_MODULE: '✅ Modül eklendi',
+        REMOVE_MODULE: '− Modül silindi',
+        UPDATE_MODULE_DATA: '✎ Modül güncellendi',
+        ADD_ITEM_TO_FIELD: '+ Eklendi',
+      }
+      let syncMatch
+      while ((syncMatch = syncRegex.exec(full)) !== null) {
+        try {
+          const action = JSON.parse(syncMatch[1]) as ActionType
+          showToast(actionLabels[action.type] ?? 'Kaydedildi')
+          dbExecuteAction(action).catch((err) => {
+            console.error('[Reborn] db action error:', err)
+            showToast('⚠ Bulut kaydı başarısız')
+          })
+        } catch (err) {
+          console.error('[Reborn] action sync error:', err)
+        }
+      }
+
+      // 5. Save conversation
       const completedMessages: Message[] = [
         ...messages,
         userMsg,
         { id: aId, role: 'assistant', content: clean, timestamp: new Date() },
       ]
-      await finalizeMessage(aId, full, sessionId, completedMessages)
-    } catch {
+      await finalizeMessage(sessionId, completedMessages)
+    } catch (err) {
+      console.error('[Reborn] send error:', err)
       setMessages((p) =>
         p.map((m) => m.id === aId ? { ...m, content: 'Bir hata oluştu. Tekrar dene.' } : m)
       )
@@ -237,7 +291,8 @@ export default function ChatInterface() {
     } catch {} finally {
       setSummarizing(false)
       setMessages([])
-      sessionIdRef.current = crypto.randomUUID()
+      conversationIdRef.current = null
+      localStorage.removeItem('reborn:active-conversation')
     }
   }
 

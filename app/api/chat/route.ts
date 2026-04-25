@@ -3,21 +3,22 @@ import type { BeroProfile, Memory } from '@/lib/memory'
 import type { ModuleItem } from '@/lib/modules'
 
 export async function POST(req: Request) {
-  const { messages, profile, memories, modules, lastConversation } = (await req.json()) as {
+  const { messages, profile, memories, modules, lastConversation, activeModule } = (await req.json()) as {
     messages: { role: 'user' | 'assistant'; content: string }[]
     profile: BeroProfile
     memories: Memory[]
     modules: ModuleItem[]
     lastConversation?: { role: string; content: string }[]
+    activeModule?: ModuleItem
   }
 
-  const systemPrompt = buildSystemPrompt(profile, memories, modules, lastConversation)
+  const systemPrompt = buildSystemPrompt(profile, memories, modules, lastConversation, activeModule)
 
   const stream = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [{ role: 'system', content: systemPrompt }, ...messages],
     stream: true,
-    max_tokens: 1024,
+    max_tokens: 2048,
   })
 
   const readable = new ReadableStream({

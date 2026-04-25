@@ -11,7 +11,8 @@ export interface ModuleItem {
 }
 
 export type ActionType =
-  | { type: 'ADD_MODULE'; payload: { id: string; name: string; icon: string; color: string; data?: Record<string, unknown> } }
+  | { type: 'CREATE_MODULE'; payload: { id: string; name: string; icon: string; color: string; data?: Record<string, unknown> } }
+  | { type: 'ADD_MODULE';    payload: { id: string; name: string; icon: string; color: string; data?: Record<string, unknown> } }
   | { type: 'REMOVE_MODULE'; payload: { id: string } }
   | { type: 'UPDATE_MODULE_DATA'; payload: { id: string; patch: Record<string, unknown> } }
   | { type: 'ADD_ITEM_TO_FIELD'; payload: { id: string; field: string; item: unknown } }
@@ -124,6 +125,7 @@ export function executeAction(action: ActionType): ModuleItem[] {
   const now = new Date().toISOString()
 
   switch (action.type) {
+    case 'CREATE_MODULE':
     case 'ADD_MODULE': {
       const exists = modules.some((m) => m.id === action.payload.id)
       if (exists) return modules
@@ -158,6 +160,20 @@ export function executeAction(action: ActionType): ModuleItem[] {
       const mod = modules.find((m) => m.id === action.payload.id)
       if (!mod) return modules
       const existing = (mod.data[action.payload.field] as unknown[]) ?? []
+
+      // Duplicate check — compare by name/title for objects, by value for strings
+      const nameOf = (item: unknown): string => {
+        if (item !== null && typeof item === 'object') {
+          const o = item as Record<string, unknown>
+          return String(o.name ?? o.title ?? o.label ?? '').toLowerCase().trim()
+        }
+        return String(item).toLowerCase().trim()
+      }
+      const newName = nameOf(action.payload.item)
+      if (newName && existing.some((i) => nameOf(i) === newName)) {
+        return modules // already exists, skip
+      }
+
       const patch = { [action.payload.field]: [...existing, action.payload.item] }
       const updated = modules.map((m) =>
         m.id === action.payload.id

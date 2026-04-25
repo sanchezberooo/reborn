@@ -78,36 +78,29 @@ export async function dbSaveConversation(
   title: string,
   messages: ConversationMessage[]
 ): Promise<void> {
-  const userId = uid()
-  await supabase.from('conversations').upsert({
-    id: sessionId,
-    user_id: userId,
-    title,
-    messages,
-    updated_at: new Date().toISOString(),
-  })
+  await supabase.from('conversations').upsert({ id: sessionId, title, messages })
 }
 
 export async function dbLoadConversations(): Promise<ConversationMeta[]> {
-  const userId = uid()
   const { data } = await supabase
     .from('conversations')
     .select('id, title, created_at')
-    .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(30)
+    .limit(50)
   return (data ?? []) as ConversationMeta[]
 }
 
 export async function dbLoadConversation(id: string): Promise<ConversationMessage[] | null> {
-  const userId = uid()
   const { data } = await supabase
     .from('conversations')
     .select('messages')
-    .eq('user_id', userId)
     .eq('id', id)
     .single()
   return (data?.messages as ConversationMessage[]) ?? null
+}
+
+export async function dbDeleteConversation(id: string): Promise<void> {
+  await supabase.from('conversations').delete().eq('id', id)
 }
 
 // ─── Modules ──────────────────────────────────────────────────────────────────
@@ -136,11 +129,33 @@ export async function dbLoadModules(): Promise<ModuleItem[]> {
     }
 
     if (!error && data && data.length === 0) {
-      await dbInitModules(userId).catch(() => {})
+      await dbInitModules(userId)
+      // Re-fetch so caller gets the freshly seeded rows
+      const { data: fresh } = await supabase
+        .from('modules')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true })
+      if (fresh && fresh.length > 0) {
+        const mods = fresh.map((row) => ({
+          id: row.id,
+          name: row.name,
+          icon: row.icon,
+          color: row.color,
+          data: row.data ?? {},
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }))
+        saveModules(mods)
+        return mods
+      }
     }
   } catch {}
 
-  return loadModules()
+  // Fallback: return localStorage and sync to Supabase in background
+  const localMods = loadModules()
+  dbSyncLocalModules(userId, localMods).catch(() => {})
+  return localMods
 }
 
 async function dbInitModules(userId: string): Promise<void> {
@@ -152,7 +167,20 @@ async function dbInitModules(userId: string): Promise<void> {
     color: m.color,
     data: m.data,
   }))
-  await supabase.from('modules').insert(rows)
+  await supabase.from('modules').upsert(rows, { onConflict: 'id' })
+}
+
+async function dbSyncLocalModules(userId: string, mods: ModuleItem[]): Promise<void> {
+  const rows = mods.map((m) => ({
+    id: m.id,
+    user_id: userId,
+    name: m.name,
+    icon: m.icon,
+    color: m.color,
+    data: m.data,
+    updated_at: m.updatedAt,
+  }))
+  await supabase.from('modules').upsert(rows, { onConflict: 'id' })
 }
 
 export async function dbExecuteAction(action: ActionType): Promise<ModuleItem[]> {
@@ -160,6 +188,7 @@ export async function dbExecuteAction(action: ActionType): Promise<ModuleItem[]>
   const now = new Date().toISOString()
 
   switch (action.type) {
+    case 'CREATE_MODULE':
     case 'ADD_MODULE': {
       const { id, name, icon, color, data } = action.payload
       await supabase.from('modules').upsert({
@@ -246,13 +275,3 @@ export async function dbRemoveItemFromField(
   return dbLoadModules()
 }
 
-// ─── Messages ─────────────────────────────────────────────────────────────────
-
-export async function dbSaveMessage(
-  sessionId: string,
-  role: 'user' | 'assistant',
-  content: string
-): Promise<void> {
-  const userId = uid()
-  await supabase.from('messages').insert({ user_id: userId, session_id: sessionId, role, content })
-}
