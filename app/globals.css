@@ -2,14 +2,15 @@
 
 :root {
   --background: #0a0a0a;
-  --foreground: #ededed;
+  --foreground: #e8e8e8;
   --gold: #c8a96e;
   --gold-dim: #a8894e;
-  --surface: #111111;
+  --surface: #141414;
+  --surface-sidebar: #0d0d0d;
   --surface-2: #1a1a1a;
   --surface-3: #222222;
-  --border: #2a2a2a;
-  --text-muted: #888888;
+  --border: #1f1f1f;
+  --text-muted: #666666;
 }
 
 @theme inline {
@@ -18,6 +19,7 @@
   --color-gold: var(--gold);
   --color-gold-dim: var(--gold-dim);
   --color-surface: var(--surface);
+  --color-surface-sidebar: var(--surface-sidebar);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
   --color-border: var(--border);

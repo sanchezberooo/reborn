@@ -1,12 +1,11 @@
-import Navigation from './Navigation'
+import Header from './Header'
+import LayoutBody from './LayoutBody'
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex h-full">
-      <Navigation />
-      <main className="flex-1 min-w-0 overflow-hidden">
-        {children}
-      </main>
+    <div className="flex flex-col h-full">
+      <Header />
+      <LayoutBody>{children}</LayoutBody>
     </div>
   )
 }

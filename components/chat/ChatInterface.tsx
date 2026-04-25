@@ -7,6 +7,7 @@ import type { Memory } from '@/lib/memory'
 import type { ModuleItem } from '@/lib/modules'
 import { DEFAULT_PROFILE } from '@/lib/memory'
 import { parseAction, executeAction } from '@/lib/modules'
+import { saveMemory } from '@/lib/memory'
 import {
   dbLoadProfile,
   dbLoadMemories,
@@ -14,19 +15,21 @@ import {
   dbLoadModules,
   dbExecuteAction,
   dbSaveMessage,
+  dbSaveConversation,
+  dbLoadConversations,
+  dbLoadConversation,
 } from '@/lib/db'
+import type { ConversationMessage } from '@/lib/db'
 import MessageBubble from './Message'
 
 function randomId() {
   return Math.random().toString(36).slice(2, 9)
 }
 
-// Strips complete + partial <REBORN_ACTION> tags from streamed content
 function stripAction(raw: string): string {
   let s = raw
-    .replace(/<REBORN_ACTION>[\s\S]*?<\/REBORN_ACTION>/g, '')   // complete tag
-    .replace(/<REBORN_ACTION>[\s\S]*$/, '')                      // opened, not yet closed
-  // Strip any partial prefix of '<REBORN_ACTION>' at end of string
+    .replace(/<REBORN_ACTION>[\s\S]*?<\/REBORN_ACTION>/g, '')
+    .replace(/<REBORN_ACTION>[\s\S]*$/, '')
   const TAG = '<REBORN_ACTION>'
   for (let len = TAG.length - 1; len >= 1; len--) {
     if (s.endsWith(TAG.slice(0, len))) {
@@ -53,10 +56,12 @@ export default function ChatInterface() {
   const [modules, setModules] = useState<ModuleItem[]>([])
   const [toasts, setToasts] = useState<{ id: string; text: string }[]>([])
   const [dataLoading, setDataLoading] = useState(true)
+  const [lastConversation, setLastConversation] = useState<ConversationMessage[]>([])
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const sessionIdRef = useRef<string>(crypto.randomUUID())
+  const newChatRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     async function load() {
@@ -69,12 +74,47 @@ export default function ChatInterface() {
         setProfile(prof)
         setMemories(mems)
         setModules(mods)
-      } catch {}
-      finally {
+
+        // Load last conversation for cross-session context
+        const convs = await dbLoadConversations().catch(() => [])
+        if (convs.length > 0) {
+          const msgs = await dbLoadConversation(convs[0].id).catch(() => null)
+          if (msgs && msgs.length > 0) {
+            setLastConversation(msgs.slice(-8))
+          }
+        }
+      } catch {} finally {
         setDataLoading(false)
       }
     }
     load()
+  }, [])
+
+  useEffect(() => { newChatRef.current = newChat })
+
+  useEffect(() => {
+    const handler = () => newChatRef.current()
+    window.addEventListener('reborn:new-chat', handler)
+    return () => window.removeEventListener('reborn:new-chat', handler)
+  }, [])
+
+  // Listen for conversation load from sidebar
+  useEffect(() => {
+    async function handler(e: Event) {
+      const { id } = (e as CustomEvent<{ id: string }>).detail
+      const msgs = await dbLoadConversation(id).catch(() => null)
+      if (!msgs) return
+      const loaded: Message[] = msgs.map((m) => ({
+        id: randomId(),
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+        timestamp: new Date(),
+      }))
+      setMessages(loaded)
+      sessionIdRef.current = crypto.randomUUID()
+    }
+    window.addEventListener('reborn:load-conversation', handler)
+    return () => window.removeEventListener('reborn:load-conversation', handler)
   }, [])
 
   useEffect(() => {
@@ -91,14 +131,19 @@ export default function ChatInterface() {
     assistantId: string,
     rawContent: string,
     sessionId: string,
+    completedMessages: Message[],
   ) => {
     const { clean, action } = parseAction(rawContent)
-    // Show clean text (no action tags)
     setMessages((p) => p.map((m) => m.id === assistantId ? { ...m, content: clean } : m))
     await dbSaveMessage(sessionId, 'assistant', clean).catch(() => {})
 
+    // Auto-save full conversation to Supabase after every assistant response
+    const title = completedMessages.find((m) => m.role === 'user')?.content.slice(0, 80) ?? 'Sohbet'
+    const msgList = completedMessages.map((m) => ({ role: m.role, content: m.content }))
+    dbSaveConversation(sessionId, title, msgList).catch(() => {})
+    window.dispatchEvent(new CustomEvent('reborn:conversation-saved'))
+
     if (action) {
-      // 1. localStorage — always works, immediate UI update
       const updated = executeAction(action)
       setModules(updated)
       window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
@@ -111,7 +156,6 @@ export default function ChatInterface() {
       }
       showToast(labels[action.type] ?? 'Kaydedildi')
 
-      // 2. Supabase sync in background — best effort
       dbExecuteAction(action).catch(() => {})
     }
   }, [])
@@ -137,7 +181,14 @@ export default function ChatInterface() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: history, profile, memories, modules }),
+        body: JSON.stringify({
+          messages: history,
+          profile,
+          memories,
+          modules,
+          // Only send lastConversation context on the first message of a new session
+          lastConversation: messages.length === 0 ? lastConversation : undefined,
+        }),
       })
       if (!res.body) throw new Error('no body')
       const reader = res.body.getReader()
@@ -148,7 +199,15 @@ export default function ChatInterface() {
         full += dec.decode(value, { stream: true })
         setMessages((p) => p.map((m) => m.id === aId ? { ...m, content: stripAction(full) } : m))
       }
-      await finalizeMessage(aId, full, sessionId)
+
+      // Build the completed message list for saving
+      const { clean } = parseAction(full)
+      const completedMessages: Message[] = [
+        ...messages,
+        userMsg,
+        { id: aId, role: 'assistant', content: clean, timestamp: new Date() },
+      ]
+      await finalizeMessage(aId, full, sessionId, completedMessages)
     } catch {
       setMessages((p) =>
         p.map((m) => m.id === aId ? { ...m, content: 'Bir hata oluştu. Tekrar dene.' } : m)
@@ -170,11 +229,12 @@ export default function ChatInterface() {
       })
       const { summary } = await res.json()
       if (summary) {
-        await dbSaveMemory(summary)
+        saveMemory(summary)
+        await dbSaveMemory(summary).catch(() => {})
         setMemories(await dbLoadMemories())
+        window.dispatchEvent(new CustomEvent('reborn:new-memory'))
       }
-    } catch {}
-    finally {
+    } catch {} finally {
       setSummarizing(false)
       setMessages([])
       sessionIdRef.current = crypto.randomUUID()
@@ -224,35 +284,15 @@ export default function ChatInterface() {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
         {isEmpty ? (
-          <div className="flex flex-col items-center justify-center h-full gap-7 px-6">
-            {/* Avatar + greeting */}
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-gold/10 border border-gold/20 flex items-center justify-center">
-                <span className="font-display text-gold text-2xl font-bold select-none">S</span>
-              </div>
+          <div className="flex flex-col items-center justify-center h-full gap-6 px-6">
+            <div className="flex flex-col items-center gap-3">
               <div className="text-center">
-                <p className="text-foreground font-semibold text-lg leading-tight">
-                  {memories.length > 0 ? `Hoş geldin, ${profile.name}` : 'Sanchez hazır'}
-                </p>
-                <p className="text-muted text-sm mt-1">
-                  {memories.length > 0
-                    ? `${memories.length} sohbet hafızamda`
-                    : 'Ne konuşmak istiyorsun?'}
-                </p>
+                <p className="font-display text-foreground text-2xl font-semibold leading-snug">Seni görmek güzel, Bero.</p>
+                <p className="text-muted text-sm mt-2">Ne konuşmak istiyorsun?</p>
               </div>
             </div>
 
-            {/* Last memory */}
-            {memories.length > 0 && (
-              <div className="w-full max-w-md bg-surface border border-border rounded-2xl p-4">
-                <p className="text-[11px] text-gold font-medium mb-2 uppercase tracking-wide">Son özet</p>
-                <p className="text-sm text-muted leading-relaxed">{memories[0].summary}</p>
-                <p className="text-[11px] text-muted/40 mt-2">{memories[0].date}</p>
-              </div>
-            )}
-
-            {/* Suggestions */}
-            <div className="flex flex-col gap-2 w-full max-w-md">
+            <div className="flex flex-col gap-2 w-full max-w-lg">
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s}
@@ -281,25 +321,7 @@ export default function ChatInterface() {
       {/* Input area */}
       <div className="shrink-0 px-4 pb-5 pt-3">
         <div className="max-w-3xl mx-auto w-full">
-
-          {/* New chat button */}
-          {!isEmpty && (
-            <div className="flex justify-end mb-2.5">
-              <button
-                onClick={newChat}
-                disabled={summarizing}
-                className="text-xs text-muted hover:text-foreground disabled:opacity-40 transition-colors flex items-center gap-1.5 group"
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="group-hover:stroke-gold transition-colors">
-                  <path d="M12 5v14M5 12l7-7 7 7" />
-                </svg>
-                {summarizing ? 'Kaydediliyor...' : 'Yeni sohbet'}
-              </button>
-            </div>
-          )}
-
-          {/* Input box */}
-          <div className="flex items-end gap-3 bg-surface border border-border rounded-2xl px-4 py-3 focus-within:border-gold/40 transition-colors duration-150 shadow-xl shadow-black/30">
+          <div className="flex items-end gap-3 bg-surface-2 border border-border rounded-2xl px-4 py-3 focus-within:border-gold/40 transition-colors duration-150 shadow-xl shadow-black/30">
             <textarea
               ref={textareaRef}
               value={input}

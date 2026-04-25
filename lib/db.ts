@@ -19,16 +19,20 @@ export async function dbLoadProfile(): Promise<BeroProfile> {
     .eq('id', userId)
     .single()
 
-  if (!data) return (await import('./memory')).DEFAULT_PROFILE
+  const defaults = (await import('./memory')).DEFAULT_PROFILE
+  if (!data) return defaults
   return {
-    name: data.name ?? 'Bero',
-    age: data.age ?? 18,
-    location: data.location ?? 'İstanbul',
-    goal: data.goal ?? 'Tam burslu CS okumak - ABD/Kanada/Avrupa',
-    ielts_target: data.ielts_target ?? '7.0+',
-    ielts_date: data.ielts_date ?? 'Eylül 2026',
-    project: data.project ?? 'Reborn - AI Life OS',
-    application_deadline: data.application_deadline ?? 'Kasım 2026',
+    name: data.name ?? defaults.name,
+    age: data.age ?? defaults.age,
+    location: data.location ?? defaults.location,
+    goal: data.goal ?? defaults.goal,
+    ielts_target: data.ielts_target ?? defaults.ielts_target,
+    ielts_exam: data.ielts_exam ?? data.ielts_date ?? defaults.ielts_exam,
+    project: data.project ?? defaults.project,
+    application_deadline: data.application_deadline ?? defaults.application_deadline,
+    universities: data.universities ?? defaults.universities,
+    strengths: data.strengths ?? defaults.strengths,
+    weaknesses: data.weaknesses ?? defaults.weaknesses,
   }
 }
 
@@ -57,6 +61,53 @@ export async function dbSaveMemory(summary: string): Promise<void> {
     day: 'numeric', month: 'long', year: 'numeric',
   })
   await supabase.from('memories').insert({ user_id: userId, summary, date })
+}
+
+// ─── Conversations ────────────────────────────────────────────────────────────
+
+export interface ConversationMeta {
+  id: string
+  title: string
+  created_at: string
+}
+
+export type ConversationMessage = { role: string; content: string }
+
+export async function dbSaveConversation(
+  sessionId: string,
+  title: string,
+  messages: ConversationMessage[]
+): Promise<void> {
+  const userId = uid()
+  await supabase.from('conversations').upsert({
+    id: sessionId,
+    user_id: userId,
+    title,
+    messages,
+    updated_at: new Date().toISOString(),
+  })
+}
+
+export async function dbLoadConversations(): Promise<ConversationMeta[]> {
+  const userId = uid()
+  const { data } = await supabase
+    .from('conversations')
+    .select('id, title, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(30)
+  return (data ?? []) as ConversationMeta[]
+}
+
+export async function dbLoadConversation(id: string): Promise<ConversationMessage[] | null> {
+  const userId = uid()
+  const { data } = await supabase
+    .from('conversations')
+    .select('messages')
+    .eq('user_id', userId)
+    .eq('id', id)
+    .single()
+  return (data?.messages as ConversationMessage[]) ?? null
 }
 
 // ─── Modules ──────────────────────────────────────────────────────────────────

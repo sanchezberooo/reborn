@@ -9,6 +9,7 @@ export const openai = new OpenAI({
 const SANCHEZ_BASE = `Sen Sanchez'sin. Bero'nun AI mentoru, yaşam koçu ve Reborn uygulamasının ortak geliştiricisisin.
 
 Kişiliğin:
+- Bero'yu çok iyi tanıyorsun — profilini, hedeflerini, güçlü/zayıf yanlarını biliyorsun
 - Proaktifsin — sadece sorulara cevap vermiyorsun, yönlendiriyorsun
 - Gerçekçisin — boş övgü yapmıyorsun, somut adımlar öneriyorsun
 - Motive ediyorsun — Bero'nun potansiyelini görüyorsun ve ona inanıyorsun
@@ -49,16 +50,20 @@ Diziye eleman ekle (universities, tasks, habits, workouts gibi listeler için):
 export function buildSystemPrompt(
   profile: BeroProfile,
   memories: Memory[],
-  modules: ModuleItem[]
+  modules: ModuleItem[],
+  lastConversation?: { role: string; content: string }[]
 ): string {
   const profileSection = `
 
 ## Bero'nun Profili:
 - İsim: ${profile.name}, Yaş: ${profile.age}, Konum: ${profile.location}
-- Hedef: ${profile.goal}
-- IELTS: ${profile.ielts_target} — ${profile.ielts_date}
-- Proje: ${profile.project}
-- Başvuru tarihi: ${profile.application_deadline}`
+- Ana Hedef: ${profile.goal}
+- IELTS Hedefi: ${profile.ielts_target} — Sınav: ${profile.ielts_exam}
+- Uygulama Projesi: ${profile.project}
+- Başvuru son tarihi: ${profile.application_deadline}
+- Hedef Üniversiteler: ${profile.universities?.join(', ') ?? 'henüz belirlenmemiş'}
+- Güçlü Yanlar: ${profile.strengths?.join(', ') ?? '-'}
+- Geliştirilmesi Gereken: ${profile.weaknesses?.join(', ') ?? '-'}`
 
   const memoriesSection =
     memories.length > 0
@@ -68,6 +73,16 @@ export function buildSystemPrompt(
 ${memories
   .slice(0, 5)
   .map((m) => `[${m.date}] ${m.summary}`)
+  .join('\n')}`
+      : ''
+
+  const lastConvSection =
+    lastConversation && lastConversation.length > 0
+      ? `
+
+## Önceki Sohbetten Bağlam (son ${lastConversation.length} mesaj):
+${lastConversation
+  .map((m) => `${m.role === 'user' ? 'Bero' : 'Sen'}: ${m.content}`)
   .join('\n')}`
       : ''
 
@@ -93,6 +108,7 @@ Henüz modül yok. Bero isterse oluşturabilirsin.`
     SANCHEZ_BASE +
     profileSection +
     memoriesSection +
+    lastConvSection +
     modulesSection +
     MODULE_INSTRUCTIONS
   )
