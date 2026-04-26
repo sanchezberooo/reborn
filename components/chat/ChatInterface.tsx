@@ -18,6 +18,7 @@ import {
   dbSaveConversation,
   dbLoadConversations,
   dbLoadConversation,
+  dbMigrateModules,
 } from '@/lib/db'
 import type { ConversationMessage } from '@/lib/db'
 import MessageBubble from './Message'
@@ -89,6 +90,7 @@ export default function ChatInterface() {
         setProfile(prof)
         setMemories(mems)
         setModules(mods)
+        dbMigrateModules().catch(() => {})
 
         // Restore active conversation from localStorage
         const savedId = localStorage.getItem('reborn:active-conversation')
@@ -234,11 +236,18 @@ export default function ChatInterface() {
       // 4. Supabase sync + toast for each action found
       const syncRegex = /<REBORN_ACTION>([\s\S]*?)<\/REBORN_ACTION>/g
       const actionLabels: Record<string, string> = {
-        CREATE_MODULE: '✅ Modül oluşturuldu',
-        ADD_MODULE: '✅ Modül eklendi',
-        REMOVE_MODULE: '− Modül silindi',
-        UPDATE_MODULE_DATA: '✎ Modül güncellendi',
+        CREATE_MODULE:     '✅ Modül oluşturuldu',
+        DELETE_MODULE:     '− Modül silindi',
+        REMOVE_MODULE:     '− Modül silindi',
+        UPDATE_MODULE_META:'✎ Modül düzenlendi',
+        REORDER_MODULES:   '↕ Sıra güncellendi',
+        UPDATE_MODULE:     '✎ Güncellendi',
+        ADD_FIELD:         '+ Alan eklendi',
+        UPDATE_FIELD:      '✎ Alan güncellendi',
         ADD_ITEM_TO_FIELD: '+ Eklendi',
+        APPEND_TO_FIELD:   '+ Kayıt eklendi',
+        REMOVE_ITEM:       '− Silindi',
+        CLEAR_FIELD:       '🗑 Temizlendi',
       }
       let syncMatch
       while ((syncMatch = syncRegex.exec(full)) !== null) {

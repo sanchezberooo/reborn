@@ -1,4 +1,5 @@
-import ModuleDetail from '@/components/dashboard/ModuleDetail'
+import EnglishModule from '@/components/modules/EnglishModule'
+import GenericModule from '@/components/modules/GenericModule'
 
 export default async function Page({
   params,
@@ -6,5 +7,11 @@ export default async function Page({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  return <ModuleDetail moduleId={id} />
+
+  switch (id) {
+    case 'english':
+      return <EnglishModule moduleId={id} />
+    default:
+      return <GenericModule moduleId={id} />
+  }
 }

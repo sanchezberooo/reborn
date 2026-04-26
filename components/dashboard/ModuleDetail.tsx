@@ -4,15 +4,14 @@ import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { dbLoadModules, dbAddItemToField, dbRemoveItemFromField } from '@/lib/db'
 import type { ModuleItem } from '@/lib/modules'
-import ModuleChat from './ModuleChat'
 
 interface FieldConfig { key: string; label: string; placeholder: string }
 
 function getFieldConfig(moduleId: string): FieldConfig {
   const map: Record<string, FieldConfig> = {
     scholarship: { key: 'universities',  label: 'Üniversiteler',    placeholder: 'MIT, Stanford, ETH Zürich...' },
-    english:     { key: 'log',           label: 'Pratik Kayıtları', placeholder: 'Bugün ne çalıştın?' },
-    daily:       { key: 'tasks',         label: 'Görevler',         placeholder: 'Yeni görev ekle...' },
+    english:     { key: 'words',         label: 'Kelime Bankası',   placeholder: 'Yeni kelime ekle...' },
+    daily:       { key: 'entries',       label: 'Günlük Kayıtlar',  placeholder: 'Bugünü yaz...' },
     roadmap:     { key: 'milestones',    label: 'Kilometre Taşları', placeholder: 'IELTS kaydı yaptır...' },
     habits:      { key: 'habits',        label: 'Alışkanlıklar',    placeholder: 'Sabah koşusu, kitap okuma...' },
     finance:     { key: 'expenses',      label: 'Harcamalar',       placeholder: 'Kurs ücreti — ₺500' },
@@ -23,7 +22,7 @@ function getFieldConfig(moduleId: string): FieldConfig {
 }
 
 function getStringFields(module: ModuleItem): { label: string; value: string }[] {
-  const skip = new Set(['items', 'notes', getFieldConfig(module.id).key])
+  const skip = new Set(['items', 'notes', 'today', getFieldConfig(module.id).key])
   return Object.entries(module.data)
     .filter(([k, v]) => !skip.has(k) && typeof v === 'string' && v !== '')
     .map(([k, v]) => ({ label: k.replace(/_/g, ' '), value: v as string }))
@@ -103,8 +102,8 @@ export default function ModuleDetail({ moduleId }: { moduleId: string }) {
   return (
     <div className="flex h-full overflow-hidden">
 
-      {/* ── Left: module content ─────────────────────────────── */}
-      <div className="flex-1 min-w-0 overflow-y-auto border-r border-border">
+      {/* ── Module content ─────────────────────────────── */}
+      <div className="flex-1 min-w-0 overflow-y-auto">
 
         {/* Sticky header */}
         <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border px-6 py-4 flex items-center gap-4">
@@ -214,11 +213,6 @@ export default function ModuleDetail({ moduleId }: { moduleId: string }) {
             })}
           </p>
         </div>
-      </div>
-
-      {/* ── Right: Sanchez chat ────────────────────────────────── */}
-      <div className="w-[300px] shrink-0 bg-surface-sidebar flex flex-col overflow-hidden">
-        <ModuleChat module={module} />
       </div>
 
     </div>

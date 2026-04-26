@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import type { BeroProfile } from './memory'
 import type { ModuleItem, ActionType } from './modules'
-import { DEFAULT_MODULES, loadModules, saveModules } from './modules'
+import { DEFAULT_MODULES, loadModules, saveModules, migrateModule } from './modules'
 
 const BERO_ID = process.env.NEXT_PUBLIC_BERO_ID ?? '00000000-0000-0000-0000-000000000001'
 
@@ -183,43 +183,148 @@ async function dbSyncLocalModules(userId: string, mods: ModuleItem[]): Promise<v
   await supabase.from('modules').upsert(rows, { onConflict: 'id' })
 }
 
+// Merges missing default data keys into each module in Supabase without overwriting existing values
+export async function dbMigrateModules(): Promise<void> {
+  const userId = uid()
+  const now = new Date().toISOString()
+  const { data, error } = await supabase
+    .from('modules')
+    .select('*')
+    .eq('user_id', userId)
+  if (error || !data) return
+
+  const rows = data.map((row) => {
+    const current: ModuleItem = {
+      id: row.id,
+      name: row.name,
+      icon: row.icon,
+      color: row.color,
+      data: row.data ?? {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }
+    const migrated = migrateModule(current)
+    return {
+      id: migrated.id,
+      user_id: userId,
+      name: migrated.name,
+      icon: migrated.icon,
+      color: migrated.color,
+      data: migrated.data,
+      updated_at: now,
+    }
+  })
+
+  await supabase.from('modules').upsert(rows, { onConflict: 'id' })
+}
+
+function dbNameOf(item: unknown): string {
+  if (item !== null && typeof item === 'object') {
+    const o = item as Record<string, unknown>
+    return String(o.name ?? o.title ?? o.label ?? '').toLowerCase().trim()
+  }
+  return String(item).toLowerCase().trim()
+}
+
+async function dbGetModuleData(userId: string, id: string): Promise<Record<string, unknown>> {
+  const { data: row } = await supabase
+    .from('modules')
+    .select('data')
+    .eq('user_id', userId)
+    .eq('id', id)
+    .single()
+  return (row?.data as Record<string, unknown>) ?? {}
+}
+
+async function dbPatchModuleData(
+  userId: string,
+  id: string,
+  patch: Record<string, unknown>,
+  now: string,
+  existing?: Record<string, unknown>
+): Promise<void> {
+  const base = existing ?? await dbGetModuleData(userId, id)
+  await supabase.from('modules')
+    .update({ data: { ...base, ...patch }, updated_at: now })
+    .eq('user_id', userId)
+    .eq('id', id)
+}
+
 export async function dbExecuteAction(action: ActionType): Promise<ModuleItem[]> {
   const userId = uid()
   const now = new Date().toISOString()
 
   switch (action.type) {
-    case 'CREATE_MODULE':
-    case 'ADD_MODULE': {
+    case 'CREATE_MODULE': {
       const { id, name, icon, color, data } = action.payload
-      await supabase.from('modules').upsert({
-        id, user_id: userId, name, icon, color, data: data ?? {}, updated_at: now,
-      })
+      await supabase.from('modules').upsert(
+        { id, user_id: userId, name, icon, color, data: data ?? {}, updated_at: now },
+        { onConflict: 'id', ignoreDuplicates: true }
+      )
       break
     }
-    case 'REMOVE_MODULE': {
-      await supabase.from('modules')
-        .delete()
-        .eq('user_id', userId)
-        .eq('id', action.payload.id)
-      break
-    }
-    case 'UPDATE_MODULE_DATA': {
-      const { data: row } = await supabase
-        .from('modules')
-        .select('data')
-        .eq('user_id', userId)
-        .eq('id', action.payload.id)
-        .single()
 
-      const merged = { ...(row?.data ?? {}), ...action.payload.patch }
-      await supabase.from('modules')
-        .update({ data: merged, updated_at: now })
-        .eq('user_id', userId)
-        .eq('id', action.payload.id)
+    case 'DELETE_MODULE':
+    case 'REMOVE_MODULE': {
+      await supabase.from('modules').delete().eq('user_id', userId).eq('id', action.payload.id)
       break
     }
+
+    case 'UPDATE_MODULE_META': {
+      const meta: Record<string, string> = { updated_at: now }
+      if (action.payload.name  !== undefined) meta.name  = action.payload.name
+      if (action.payload.icon  !== undefined) meta.icon  = action.payload.icon
+      if (action.payload.color !== undefined) meta.color = action.payload.color
+      await supabase.from('modules').update(meta).eq('user_id', userId).eq('id', action.payload.id)
+      break
+    }
+
+    case 'REORDER_MODULES':
+      // Order persisted in localStorage only — no Supabase column for position
+      break
+
+    case 'UPDATE_MODULE': {
+      const base = await dbGetModuleData(userId, action.payload.id)
+      await dbPatchModuleData(userId, action.payload.id, action.payload.patch, now, base)
+      break
+    }
+
+    case 'ADD_FIELD':
+    case 'UPDATE_FIELD': {
+      const base = await dbGetModuleData(userId, action.payload.id)
+      await dbPatchModuleData(userId, action.payload.id, { [action.payload.field]: action.payload.value }, now, base)
+      break
+    }
+
     case 'ADD_ITEM_TO_FIELD': {
-      return dbAddItemToField(action.payload.id, action.payload.field, action.payload.item)
+      const base = await dbGetModuleData(userId, action.payload.id)
+      const existing = (base[action.payload.field] as unknown[]) ?? []
+      const newName = dbNameOf(action.payload.item)
+      if (newName && existing.some((i) => dbNameOf(i) === newName)) break
+      await dbPatchModuleData(userId, action.payload.id, { [action.payload.field]: [...existing, action.payload.item] }, now, base)
+      break
+    }
+
+    case 'APPEND_TO_FIELD': {
+      const base = await dbGetModuleData(userId, action.payload.id)
+      const existing = (base[action.payload.field] as unknown[]) ?? []
+      await dbPatchModuleData(userId, action.payload.id, { [action.payload.field]: [...existing, action.payload.item] }, now, base)
+      break
+    }
+
+    case 'REMOVE_ITEM': {
+      const base = await dbGetModuleData(userId, action.payload.id)
+      const existing = (base[action.payload.field] as unknown[]) ?? []
+      const target = action.payload.name.toLowerCase().trim()
+      const filtered = existing.filter((i) => dbNameOf(i) !== target)
+      await dbPatchModuleData(userId, action.payload.id, { [action.payload.field]: filtered }, now, base)
+      break
+    }
+
+    case 'CLEAR_FIELD': {
+      const base = await dbGetModuleData(userId, action.payload.id)
+      await dbPatchModuleData(userId, action.payload.id, { [action.payload.field]: [] }, now, base)
+      break
     }
   }
 
