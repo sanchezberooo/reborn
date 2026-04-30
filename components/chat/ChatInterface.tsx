@@ -2,18 +2,9 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Message } from '@/lib/types'
-import type { BeroProfile } from '@/lib/memory'
-import type { Memory } from '@/lib/memory'
-import type { ModuleItem } from '@/lib/modules'
-import { DEFAULT_PROFILE } from '@/lib/memory'
-import { executeAction, loadModules } from '@/lib/modules'
 import type { ActionType } from '@/lib/modules'
-import { saveMemory } from '@/lib/memory'
 import {
-  dbLoadProfile,
-  dbLoadMemories,
   dbSaveMemory,
-  dbLoadModules,
   dbExecuteAction,
   dbSaveConversation,
   dbLoadConversations,
@@ -27,18 +18,7 @@ function randomId() {
   return Math.random().toString(36).slice(2, 9)
 }
 
-// Executes every REBORN_ACTION in text (localStorage) and returns cleaned display string
 function cleanResponse(text: string): string {
-  const actionRegex = /<REBORN_ACTION>([\s\S]*?)<\/REBORN_ACTION>/g
-  let match
-  while ((match = actionRegex.exec(text)) !== null) {
-    try {
-      const action = JSON.parse(match[1]) as ActionType
-      executeAction(action)
-    } catch (e) {
-      console.error('Action parse error:', e)
-    }
-  }
   return text.replace(/<REBORN_ACTION>[\s\S]*?<\/REBORN_ACTION>/g, '').trim()
 }
 
@@ -67,9 +47,6 @@ export default function ChatInterface() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [summarizing, setSummarizing] = useState(false)
-  const [profile, setProfile] = useState<BeroProfile>(DEFAULT_PROFILE)
-  const [memories, setMemories] = useState<Memory[]>([])
-  const [modules, setModules] = useState<ModuleItem[]>([])
   const [toasts, setToasts] = useState<{ id: string; text: string }[]>([])
   const [dataLoading, setDataLoading] = useState(true)
   const [lastConversation, setLastConversation] = useState<ConversationMessage[]>([])
@@ -82,14 +59,6 @@ export default function ChatInterface() {
   useEffect(() => {
     async function load() {
       try {
-        const [prof, mems, mods] = await Promise.all([
-          dbLoadProfile(),
-          dbLoadMemories(),
-          dbLoadModules(),
-        ])
-        setProfile(prof)
-        setMemories(mems)
-        setModules(mods)
         dbMigrateModules().catch(() => {})
 
         // Restore active conversation from localStorage
@@ -203,13 +172,10 @@ export default function ChatInterface() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: history,
-          profile,
-          memories,
-          modules,
-          // Only send lastConversation context on the first message of a new session
           lastConversation: messages.length === 0 ? lastConversation : undefined,
         }),
       })
+      if (!res.ok) throw new Error(`API ${res.status}`)
       if (!res.body) throw new Error('no body')
       const reader = res.body.getReader()
       const dec = new TextDecoder()
@@ -229,12 +195,7 @@ export default function ChatInterface() {
       // 2. Update display — no tags
       setMessages((p) => p.map((m) => m.id === aId ? { ...m, content: clean } : m))
 
-      // 3. Refresh modules state from localStorage (executeAction already wrote it)
-      setModules(loadModules())
-      window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
-
-      // 4. Supabase sync + toast for each action found
-      const syncRegex = /<REBORN_ACTION>([\s\S]*?)<\/REBORN_ACTION>/g
+      // 3. Supabase'e kaydet + toast
       const actionLabels: Record<string, string> = {
         CREATE_MODULE:     '✅ Modül oluşturuldu',
         DELETE_MODULE:     '− Modül silindi',
@@ -249,19 +210,25 @@ export default function ChatInterface() {
         REMOVE_ITEM:       '− Silindi',
         CLEAR_FIELD:       '🗑 Temizlendi',
       }
+      const actionsToRun: ActionType[] = []
+      const syncRegex = /<REBORN_ACTION>([\s\S]*?)<\/REBORN_ACTION>/g
       let syncMatch
       while ((syncMatch = syncRegex.exec(full)) !== null) {
         try {
           const action = JSON.parse(syncMatch[1]) as ActionType
           showToast(actionLabels[action.type] ?? 'Kaydedildi')
-          dbExecuteAction(action).catch((err) => {
-            console.error('[Reborn] db action error:', err)
-            showToast('⚠ Bulut kaydı başarısız')
-          })
+          actionsToRun.push(action)
         } catch (err) {
-          console.error('[Reborn] action sync error:', err)
+          console.error('[Reborn] action parse error:', err)
         }
       }
+      for (const action of actionsToRun) {
+        await dbExecuteAction(action).catch((err) => {
+          console.error('[Reborn] db action error:', err)
+          showToast('⚠ Bulut kaydı başarısız')
+        })
+      }
+      window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
 
       // 5. Save conversation
       const completedMessages: Message[] = [
@@ -292,9 +259,7 @@ export default function ChatInterface() {
       })
       const { summary } = await res.json()
       if (summary) {
-        saveMemory(summary)
         await dbSaveMemory(summary).catch(() => {})
-        setMemories(await dbLoadMemories())
         window.dispatchEvent(new CustomEvent('reborn:new-memory'))
       }
     } catch {} finally {

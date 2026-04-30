@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import type { BeroProfile } from './memory'
 import type { ModuleItem, ActionType } from './modules'
-import { DEFAULT_MODULES, loadModules, saveModules, migrateModule } from './modules'
+import { DEFAULT_MODULES, migrateModule } from './modules'
 
 const BERO_ID = process.env.NEXT_PUBLIC_BERO_ID ?? '00000000-0000-0000-0000-000000000001'
 
@@ -103,59 +103,110 @@ export async function dbDeleteConversation(id: string): Promise<void> {
   await supabase.from('conversations').delete().eq('id', id)
 }
 
+// ─── Habit Logs ───────────────────────────────────────────────────────────────
+
+export type HabitLogStore = Record<string, boolean> // `${YYYY-MM-DD}|${habitId}` → true
+
+export async function dbLoadHabitLogs(): Promise<HabitLogStore> {
+  const { data, error } = await supabase
+    .from('habit_logs')
+    .select('date, habit_id, completed')
+    .eq('user_id', uid())
+
+  if (error) throw error
+
+  const out: HabitLogStore = {}
+  ;(data ?? []).forEach((r) => { if (r.completed) out[`${r.date}|${r.habit_id}`] = true })
+  return out
+}
+
+export async function dbToggleHabitLog(date: string, habitId: string, on: boolean): Promise<void> {
+  if (on) {
+    await supabase.from('habit_logs').upsert(
+      { user_id: uid(), date, habit_id: habitId, completed: true },
+      { onConflict: 'user_id,date,habit_id' },
+    )
+  } else {
+    await supabase.from('habit_logs')
+      .delete()
+      .eq('user_id', uid())
+      .eq('date', date)
+      .eq('habit_id', habitId)
+  }
+}
+
+// ─── Module Order ─────────────────────────────────────────────────────────────
+
+function applyDbOrder(modules: ModuleItem[], order: string[]): ModuleItem[] {
+  if (!order || order.length === 0) return modules
+  const map = new Map(modules.map((m) => [m.id, m]))
+  const sorted = order.map((id) => map.get(id)).filter(Boolean) as ModuleItem[]
+  const inOrder = new Set(order)
+  const rest = modules.filter((m) => !inOrder.has(m.id))
+  return [...sorted, ...rest]
+}
+
+async function dbLoadModuleOrder(): Promise<string[]> {
+  const userId = uid()
+  const { data } = await supabase
+    .from('modules_order')
+    .select('order')
+    .eq('user_id', userId)
+    .single()
+  return (data?.order as string[]) ?? []
+}
+
+export async function dbSaveModuleOrder(order: string[]): Promise<void> {
+  const userId = uid()
+  await supabase
+    .from('modules_order')
+    .upsert({ user_id: userId, order }, { onConflict: 'user_id' })
+}
+
 // ─── Modules ──────────────────────────────────────────────────────────────────
 
 export async function dbLoadModules(): Promise<ModuleItem[]> {
   const userId = uid()
-  try {
-    const { data, error } = await supabase
-      .from('modules')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true })
+  const [{ data, error }, order] = await Promise.all([
+    supabase.from('modules').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
+    dbLoadModuleOrder().catch(() => [] as string[]),
+  ])
 
-    if (!error && data && data.length > 0) {
-      const mods = data.map((row) => ({
-        id: row.id,
-        name: row.name,
-        icon: row.icon,
-        color: row.color,
-        data: row.data ?? {},
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-      }))
-      saveModules(mods)
-      return mods
-    }
+  if (error) throw error
 
-    if (!error && data && data.length === 0) {
-      await dbInitModules(userId)
-      // Re-fetch so caller gets the freshly seeded rows
-      const { data: fresh } = await supabase
-        .from('modules')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: true })
-      if (fresh && fresh.length > 0) {
-        const mods = fresh.map((row) => ({
-          id: row.id,
-          name: row.name,
-          icon: row.icon,
-          color: row.color,
-          data: row.data ?? {},
-          createdAt: row.created_at,
-          updatedAt: row.updated_at,
-        }))
-        saveModules(mods)
-        return mods
-      }
-    }
-  } catch {}
+  if (data && data.length > 0) {
+    const mods = data.map((row) => ({
+      id: row.id,
+      name: row.name,
+      icon: row.icon,
+      color: row.color,
+      data: row.data ?? {},
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }))
+    return applyDbOrder(mods, order)
+  }
 
-  // Fallback: return localStorage and sync to Supabase in background
-  const localMods = loadModules()
-  dbSyncLocalModules(userId, localMods).catch(() => {})
-  return localMods
+  // Empty — seed defaults then re-fetch
+  await dbInitModules(userId)
+  const { data: fresh, error: freshError } = await supabase
+    .from('modules')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true })
+
+  if (freshError) throw freshError
+
+  const mods = (fresh ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    icon: row.icon,
+    color: row.color,
+    data: row.data ?? {},
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }))
+  return applyDbOrder(mods, order)
 }
 
 async function dbInitModules(userId: string): Promise<void> {
@@ -166,19 +217,6 @@ async function dbInitModules(userId: string): Promise<void> {
     icon: m.icon,
     color: m.color,
     data: m.data,
-  }))
-  await supabase.from('modules').upsert(rows, { onConflict: 'id' })
-}
-
-async function dbSyncLocalModules(userId: string, mods: ModuleItem[]): Promise<void> {
-  const rows = mods.map((m) => ({
-    id: m.id,
-    user_id: userId,
-    name: m.name,
-    icon: m.icon,
-    color: m.color,
-    data: m.data,
-    updated_at: m.updatedAt,
   }))
   await supabase.from('modules').upsert(rows, { onConflict: 'id' })
 }
@@ -279,9 +317,10 @@ export async function dbExecuteAction(action: ActionType): Promise<ModuleItem[]>
       break
     }
 
-    case 'REORDER_MODULES':
-      // Order persisted in localStorage only — no Supabase column for position
+    case 'REORDER_MODULES': {
+      await dbSaveModuleOrder(action.payload.order)
       break
+    }
 
     case 'UPDATE_MODULE': {
       const base = await dbGetModuleData(userId, action.payload.id)

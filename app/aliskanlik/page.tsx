@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { dbLoadHabitLogs, dbToggleHabitLog } from '@/lib/db'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -15,9 +15,6 @@ interface Habit {
 type LogStore = Record<string, boolean> // `${YYYY-MM-DD}|${habitId}` → true
 
 // ─── constants ────────────────────────────────────────────────────────────────
-
-const LOGS_KEY = 'reborn:habit_logs'
-const BERO_ID  = process.env.NEXT_PUBLIC_BERO_ID ?? '00000000-0000-0000-0000-000000000001'
 
 const HABITS: Habit[] = [
   { id: 'sleep',    name: 'Uyku 7-8 saat',       icon: '😴', color: '#6eb5c8' },
@@ -86,43 +83,6 @@ function dayRate(d: Date, habits: Habit[], logs: LogStore): number {
   return Math.round(
     (habits.filter((h) => logs[logKey(localISO(d), h.id)]).length / habits.length) * 100,
   )
-}
-
-// ─── storage ──────────────────────────────────────────────────────────────────
-
-function localLoad(): LogStore {
-  if (typeof window === 'undefined') return {}
-  try { const r = localStorage.getItem(LOGS_KEY); return r ? JSON.parse(r) : {} }
-  catch { return {} }
-}
-
-function localSave(logs: LogStore) {
-  try { localStorage.setItem(LOGS_KEY, JSON.stringify(logs)) } catch {}
-}
-
-async function dbToggle(date: string, habitId: string, on: boolean) {
-  try {
-    if (on) {
-      await supabase.from('habit_logs').upsert(
-        { user_id: BERO_ID, date, habit_id: habitId, completed: true },
-        { onConflict: 'user_id,date,habit_id' },
-      )
-    } else {
-      await supabase.from('habit_logs')
-        .delete().eq('user_id', BERO_ID).eq('date', date).eq('habit_id', habitId)
-    }
-  } catch {}
-}
-
-async function dbLoad(): Promise<LogStore> {
-  try {
-    const { data } = await supabase
-      .from('habit_logs').select('date,habit_id,completed').eq('user_id', BERO_ID)
-    if (!data) return {}
-    const out: LogStore = {}
-    data.forEach((r) => { if (r.completed) out[logKey(r.date, r.habit_id)] = true })
-    return out
-  } catch { return {} }
 }
 
 // ─── ui atoms ─────────────────────────────────────────────────────────────────
@@ -449,15 +409,7 @@ export default function AliskanlikPage() {
   const today = todayISO()
 
   useEffect(() => {
-    const local = localLoad()
-    setLogs(local)
-    dbLoad().then((remote) => {
-      if (Object.keys(remote).length > 0) {
-        const merged = { ...local, ...remote }
-        setLogs(merged)
-        localSave(merged)
-      }
-    })
+    dbLoadHabitLogs().then(setLogs).catch(() => {})
   }, [])
 
   const toggle = useCallback((date: string, habitId: string) => {
@@ -465,8 +417,7 @@ export default function AliskanlikPage() {
       const k    = logKey(date, habitId)
       const next = { ...prev }
       if (next[k]) { delete next[k] } else { next[k] = true }
-      localSave(next)
-      dbToggle(date, habitId, !!next[k])
+      dbToggleHabitLog(date, habitId, !!next[k]).catch(() => {})
       return next
     })
   }, [])

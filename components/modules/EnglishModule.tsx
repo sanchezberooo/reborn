@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { dbLoadModules, dbExecuteAction } from '@/lib/db'
-import { executeAction } from '@/lib/modules'
 import type { ModuleItem, ActionType } from '@/lib/modules'
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -71,9 +70,8 @@ export default function EnglishModule({ moduleId }: { moduleId: string }) {
   }, [moduleId])
 
   async function act(action: ActionType) {
-    executeAction(action)
-    window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
     await dbExecuteAction(action).catch(() => {})
+    window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
   }
 
   if (loading) {

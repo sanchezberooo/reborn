@@ -2,9 +2,8 @@
 
 import { useState, useRef, useEffect } from 'react'
 import type { ModuleItem } from '@/lib/modules'
-import { parseAction, executeAction } from '@/lib/modules'
-import { DEFAULT_PROFILE } from '@/lib/memory'
-import { dbLoadProfile, dbLoadMemories, dbLoadModules, dbExecuteAction } from '@/lib/db'
+import { parseAction } from '@/lib/modules'
+import { dbExecuteAction } from '@/lib/db'
 
 type Msg = { id: string; role: 'user' | 'assistant'; content: string }
 
@@ -25,27 +24,8 @@ export default function ModuleChat({ module }: { module: ModuleItem }) {
   const [messages, setMessages] = useState<Msg[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [ctx, setCtx] = useState<{
-    profile: typeof DEFAULT_PROFILE
-    memories: unknown[]
-    modules: ModuleItem[]
-  } | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-
-  useEffect(() => {
-    Promise.all([dbLoadProfile(), dbLoadMemories(), dbLoadModules()])
-      .then(([profile, memories, modules]) => setCtx({ profile, memories: memories as unknown[], modules }))
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    function refresh() {
-      dbLoadModules().then(mods => setCtx(prev => prev ? { ...prev, modules: mods } : prev)).catch(() => {})
-    }
-    window.addEventListener('reborn:modules-updated', refresh)
-    return () => window.removeEventListener('reborn:modules-updated', refresh)
-  }, [])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -53,7 +33,7 @@ export default function ModuleChat({ module }: { module: ModuleItem }) {
 
   async function send() {
     const text = input.trim()
-    if (!text || loading || !ctx) return
+    if (!text || loading) return
 
     const userMsg: Msg = { id: rid(), role: 'user', content: text }
     const aId = rid()
@@ -70,12 +50,10 @@ export default function ModuleChat({ module }: { module: ModuleItem }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           messages: history,
-          profile: ctx.profile,
-          memories: ctx.memories,
-          modules: ctx.modules,
           activeModule: module,
         }),
       })
+      if (!res.ok) throw new Error(`API ${res.status}`)
       if (!res.body) throw new Error('no body')
       const reader = res.body.getReader()
       const dec = new TextDecoder()
@@ -85,15 +63,12 @@ export default function ModuleChat({ module }: { module: ModuleItem }) {
         full += dec.decode(value, { stream: true })
         setMessages(prev => prev.map(m => m.id === aId ? { ...m, content: stripAction(full) } : m))
       }
-      full += dec.decode() // flush remaining bytes
-      console.log('[Reborn ModuleChat] full response:', full.slice(-200))
+      full += dec.decode()
       const { clean, action } = parseAction(full)
       setMessages(prev => prev.map(m => m.id === aId ? { ...m, content: clean } : m))
       if (action) {
-        console.log('[Reborn ModuleChat] executing action:', action)
-        executeAction(action)
-        window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
         await dbExecuteAction(action).catch((err) => console.error('[Reborn ModuleChat] db error:', err))
+        window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
       }
     } catch (err) {
       console.error('[Reborn ModuleChat] send error:', err)
@@ -156,13 +131,12 @@ export default function ModuleChat({ module }: { module: ModuleItem }) {
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() } }}
             placeholder="Sanchez'e sor..."
             rows={1}
-            disabled={!ctx}
-            className="flex-1 bg-transparent text-[12px] text-foreground placeholder:text-muted/60 resize-none outline-none leading-relaxed py-0.5 disabled:opacity-40"
+            className="flex-1 bg-transparent text-[12px] text-foreground placeholder:text-muted/60 resize-none outline-none leading-relaxed py-0.5"
             style={{ maxHeight: '100px' }}
           />
           <button
             onClick={send}
-            disabled={!input.trim() || loading || !ctx}
+            disabled={!input.trim() || loading}
             className="shrink-0 w-6 h-6 rounded-lg bg-gold flex items-center justify-center disabled:opacity-25 hover:opacity-75 transition-opacity"
           >
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-background -rotate-90">

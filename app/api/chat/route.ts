@@ -1,17 +1,25 @@
 import { openai, buildSystemPrompt } from '@/lib/openai'
-import type { BeroProfile, Memory } from '@/lib/memory'
+import { dbLoadProfile, dbLoadMemories, dbLoadModules } from '@/lib/db'
 import type { ModuleItem } from '@/lib/modules'
 
 export async function POST(req: Request) {
-  const { messages, profile, memories, modules, lastConversation, activeModule } = (await req.json()) as {
+  const { messages, lastConversation, activeModule } = (await req.json()) as {
     messages: { role: 'user' | 'assistant'; content: string }[]
-    profile: BeroProfile
-    memories: Memory[]
-    modules: ModuleItem[]
     lastConversation?: { role: string; content: string }[]
     activeModule?: ModuleItem
   }
 
+  const data = await Promise.all([
+    dbLoadProfile(),
+    dbLoadMemories(),
+    dbLoadModules(),
+  ]).catch(() => null)
+
+  if (!data) {
+    return new Response('Bağlantı sorunu. Tekrar dene.', { status: 503 })
+  }
+
+  const [profile, memories, modules] = data
   const systemPrompt = buildSystemPrompt(profile, memories, modules, lastConversation, activeModule)
 
   const stream = await openai.chat.completions.create({

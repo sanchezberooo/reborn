@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { loadModules } from '@/lib/modules'
+import { dbLoadModules, dbLoadHabitLogs } from '@/lib/db'
 import type { ModuleItem } from '@/lib/modules'
 
-// ─── habit helpers (same store as /aliskanlik) ────────────────────────────────
+// ─── habit helpers ────────────────────────────────────────────────────────────
 
 const HABIT_IDS = ['sleep','eat','social','water','study','exercise','read','journal','plan']
 
@@ -13,11 +13,6 @@ function localISO(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 }
 function todayISO() { return localISO(new Date()) }
-
-function loadHabitLogs(): Record<string, boolean> {
-  try { const r = localStorage.getItem('reborn:habit_logs'); return r ? JSON.parse(r) : {} }
-  catch { return {} }
-}
 
 function weekDates(ref: Date): Date[] {
   const d = new Date(ref)
@@ -294,11 +289,11 @@ export default function DashboardPage() {
   const [logs,    setLogs]    = useState<Record<string, boolean>>({})
 
   useEffect(() => {
-    setLogs(loadHabitLogs())
-    try { setModules(loadModules()) } catch {}
+    dbLoadHabitLogs().then(setLogs).catch(() => {})
+    dbLoadModules().then(setModules).catch(() => {})
 
     function onUpdate() {
-      try { setModules(loadModules()) } catch {}
+      dbLoadModules().then(setModules).catch(() => {})
     }
     window.addEventListener('reborn:modules-updated', onUpdate)
     return () => window.removeEventListener('reborn:modules-updated', onUpdate)

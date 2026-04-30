@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { loadMemories } from '@/lib/memory'
+import { dbLoadMemories } from '@/lib/db'
 import type { Memory } from '@/lib/memory'
 
 const navItems = [
@@ -56,7 +56,7 @@ export default function Navigation() {
   const [memories, setMemories] = useState<Memory[]>([])
 
   const refresh = useCallback(() => {
-    setMemories(loadMemories())
+    dbLoadMemories().then(setMemories).catch(() => {})
   }, [])
 
   useEffect(() => {
