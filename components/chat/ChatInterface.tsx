@@ -5,7 +5,6 @@ import type { Message } from '@/lib/types'
 import type { ActionType } from '@/lib/modules'
 import {
   dbSaveMemory,
-  dbExecuteAction,
   dbSaveConversation,
   dbLoadConversations,
   dbLoadConversation,
@@ -222,11 +221,13 @@ export default function ChatInterface() {
           console.error('[Reborn] action parse error:', err)
         }
       }
-      for (const action of actionsToRun) {
-        await dbExecuteAction(action).catch((err) => {
-          console.error('[Reborn] db action error:', err)
-          showToast('⚠ Bulut kaydı başarısız')
-        })
+      if (actionsToRun.length > 0) {
+        const actionRes = await fetch('/api/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actions: actionsToRun }),
+        }).catch(() => null)
+        if (!actionRes?.ok) showToast('⚠ Bulut kaydı başarısız')
       }
       window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
 
