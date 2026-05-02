@@ -1,32 +1,31 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { dbLoadHabitLogs, dbToggleHabitLog } from '@/lib/db'
+import { dbLoadHabitLogs, dbToggleHabitLog, dbLoadHabits } from '@/lib/db'
+import type { Habit } from '@/lib/db'
 
 // ─── types ────────────────────────────────────────────────────────────────────
-
-interface Habit {
-  id: string
-  name: string
-  icon: string
-  color: string
-}
 
 type LogStore = Record<string, boolean> // `${YYYY-MM-DD}|${habitId}` → true
 
 // ─── constants ────────────────────────────────────────────────────────────────
 
-const HABITS: Habit[] = [
-  { id: 'sleep',    name: 'Uyku 7-8 saat',       icon: '😴', color: '#6eb5c8' },
-  { id: 'eat',      name: 'Sağlıklı beslen',      icon: '🥗', color: '#6ec8a9' },
-  { id: 'social',   name: 'Sosyal medya ≤90dk',  icon: '📵', color: '#c86e6e' },
-  { id: 'water',    name: '2L su iç',             icon: '💧', color: '#5ab8d4' },
-  { id: 'study',    name: '2 saat çalış',         icon: '📖', color: '#c8a96e' },
-  { id: 'exercise', name: '30dk egzersiz',        icon: '🏃', color: '#c8956e' },
-  { id: 'read',     name: '30dk oku',             icon: '📚', color: '#956ec8' },
-  { id: 'journal',  name: 'Günlük yaz',           icon: '✍️', color: '#c86e9a' },
-  { id: 'plan',     name: 'Yarını planla',        icon: '🗓️', color: '#8ec86e' },
-]
+const HABIT_COLORS: Record<string, string> = {
+  sleep:        '#6eb5c8',
+  eat:          '#6ec8a9',
+  social:       '#c86e6e',
+  social_media: '#c86e6e',
+  water:        '#5ab8d4',
+  study:        '#c8a96e',
+  exercise:     '#c8956e',
+  read:         '#956ec8',
+  journal:      '#c86e9a',
+  plan:         '#8ec86e',
+}
+
+function habitColor(id: string): string {
+  return HABIT_COLORS[id] ?? '#c8a96e'
+}
 
 const DAY_TR   = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz']
 const MONTH_TR = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
@@ -131,7 +130,7 @@ function THead({ habits }: { habits: Habit[] }) {
         </th>
         {habits.map((h) => (
           <th key={h.id} className="py-2.5 px-1 w-9 text-center" title={h.name}>
-            <span className="text-[15px] leading-none">{h.icon}</span>
+            <span className="text-[15px] leading-none">{h.emoji}</span>
           </th>
         ))}
         <th className="text-left py-2.5 pl-3 text-[10px] text-muted/40 uppercase tracking-widest font-medium w-32">
@@ -145,10 +144,10 @@ function THead({ habits }: { habits: Habit[] }) {
 // ─── week tab ─────────────────────────────────────────────────────────────────
 
 function WeekTab({
-  logs, toggle, today,
-}: { logs: LogStore; toggle: (d: string, h: string) => void; today: string }) {
-  const days = weekDates(new Date(today))
-  const weekPct = rate(days, HABITS, logs)
+  habits, logs, toggle, today,
+}: { habits: Habit[]; logs: LogStore; toggle: (d: string, h: string) => void; today: string }) {
+  const days    = weekDates(new Date(today))
+  const weekPct = rate(days, habits, logs)
 
   return (
     <>
@@ -158,18 +157,18 @@ function WeekTab({
           <Bar pct={weekPct} />
         </div>
         <span className="text-xs text-muted ml-auto">
-          {days.filter((d) => dayRate(d, HABITS, logs) === 100).length}/7 tam gün
+          {days.filter((d) => dayRate(d, habits, logs) === 100).length}/7 tam gün
         </span>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
-          <THead habits={HABITS} />
+          <THead habits={habits} />
           <tbody>
             {days.map((d, i) => {
-              const iso = localISO(d)
+              const iso     = localISO(d)
               const isToday = iso === today
-              const pct = dayRate(d, HABITS, logs)
+              const pct     = dayRate(d, habits, logs)
               return (
                 <tr
                   key={iso}
@@ -192,11 +191,11 @@ function WeekTab({
                       )}
                     </div>
                   </td>
-                  {HABITS.map((h) => (
+                  {habits.map((h) => (
                     <td key={h.id} className="py-2.5 px-1">
                       <Check
                         on={!!logs[logKey(iso, h.id)]}
-                        color={h.color}
+                        color={habitColor(h.id)}
                         onChange={() => toggle(iso, h.id)}
                       />
                     </td>
@@ -217,11 +216,11 @@ function WeekTab({
 // ─── month tab ────────────────────────────────────────────────────────────────
 
 function MonthTab({
-  logs, toggle, today,
-}: { logs: LogStore; toggle: (d: string, h: string) => void; today: string }) {
-  const ref   = new Date(today)
-  const days  = monthDates(ref.getFullYear(), ref.getMonth())
-  const mPct  = rate(days, HABITS, logs)
+  habits, logs, toggle, today,
+}: { habits: Habit[]; logs: LogStore; toggle: (d: string, h: string) => void; today: string }) {
+  const ref  = new Date(today)
+  const days = monthDates(ref.getFullYear(), ref.getMonth())
+  const mPct = rate(days, habits, logs)
 
   return (
     <>
@@ -233,19 +232,19 @@ function MonthTab({
           <Bar pct={mPct} />
         </div>
         <span className="text-xs text-muted ml-auto">
-          {days.filter((d) => dayRate(d, HABITS, logs) === 100).length} tam gün
+          {days.filter((d) => dayRate(d, habits, logs) === 100).length} tam gün
         </span>
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
-          <THead habits={HABITS} />
+          <THead habits={habits} />
           <tbody>
             {days.map((d) => {
-              const iso    = localISO(d)
+              const iso     = localISO(d)
               const isToday = iso === today
-              const pct    = dayRate(d, HABITS, logs)
-              const dow    = dowIndex(d)
+              const pct     = dayRate(d, habits, logs)
+              const dow     = dowIndex(d)
               return (
                 <tr
                   key={iso}
@@ -263,11 +262,11 @@ function MonthTab({
                       <span className="text-[10px] text-muted/30">{DAY_TR[dow]}</span>
                     </div>
                   </td>
-                  {HABITS.map((h) => (
+                  {habits.map((h) => (
                     <td key={h.id} className="py-1.5 px-1">
                       <Check
                         on={!!logs[logKey(iso, h.id)]}
-                        color={h.color}
+                        color={habitColor(h.id)}
                         onChange={() => toggle(iso, h.id)}
                       />
                     </td>
@@ -287,37 +286,34 @@ function MonthTab({
 
 // ─── year tab ─────────────────────────────────────────────────────────────────
 
-function YearTab({ logs, today }: { logs: LogStore; today: string }) {
+function YearTab({ habits, logs, today }: { habits: Habit[]; logs: LogStore; today: string }) {
   const now  = new Date(today)
   const year = now.getFullYear()
   const yearStart = new Date(year, 0, 1)
 
-  // days elapsed this year up to today
   const daysThisYear = daysBetween(yearStart, now)
-  const yearPct      = rate(daysThisYear, HABITS, logs)
+  const yearPct      = rate(daysThisYear, habits, logs)
 
   return (
     <>
-      {/* year header */}
       <div className="flex items-center gap-4 mb-6">
         <span className="font-display text-lg text-foreground">{year}</span>
         <div className="flex-1 max-w-xs">
           <Bar pct={yearPct} />
         </div>
         <span className="text-xs text-muted">
-          {daysThisYear.filter((d) => dayRate(d, HABITS, logs) === 100).length} tam gün
+          {daysThisYear.filter((d) => dayRate(d, habits, logs) === 100).length} tam gün
         </span>
       </div>
 
-      {/* 12 month cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mb-8">
         {Array.from({ length: 12 }, (_, mi) => {
-          const days         = monthDates(year, mi)
-          const isCurrent    = mi === now.getMonth()
-          const isFuture     = mi > now.getMonth()
+          const days          = monthDates(year, mi)
+          const isCurrent     = mi === now.getMonth()
+          const isFuture      = mi > now.getMonth()
           const effectiveDays = isCurrent ? daysBetween(new Date(year, mi, 1), now) : days
-          const pct          = isFuture ? 0 : rate(effectiveDays, HABITS, logs)
-          const fullDays     = effectiveDays.filter((d) => dayRate(d, HABITS, logs) === 100).length
+          const pct           = isFuture ? 0 : rate(effectiveDays, habits, logs)
+          const fullDays      = effectiveDays.filter((d) => dayRate(d, habits, logs) === 100).length
 
           return (
             <div
@@ -361,27 +357,27 @@ function YearTab({ logs, today }: { logs: LogStore; today: string }) {
         })}
       </div>
 
-      {/* habit breakdown for this year */}
       <div>
         <p className="text-[10px] text-muted/40 uppercase tracking-widest font-medium mb-3">
           Alışkanlık Bazında — {year}
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {HABITS.map((h) => {
+          {habits.map((h) => {
             const done = daysThisYear.filter((d) => logs[logKey(localISO(d), h.id)]).length
             const pct  = daysThisYear.length
               ? Math.round((done / daysThisYear.length) * 100) : 0
+            const color = habitColor(h.id)
             return (
               <div
                 key={h.id}
                 className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-surface border border-border"
               >
-                <span className="text-base shrink-0">{h.icon}</span>
+                <span className="text-base shrink-0">{h.emoji}</span>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-foreground/80 truncate mb-1">{h.name}</p>
-                  <Bar pct={pct} color={h.color} thin />
+                  <Bar pct={pct} color={color} thin />
                 </div>
-                <span className="text-xs font-semibold shrink-0" style={{ color: h.color }}>
+                <span className="text-xs font-semibold shrink-0" style={{ color }}>
                   {done}g
                 </span>
               </div>
@@ -404,12 +400,20 @@ const TABS: { id: TabId; label: string }[] = [
 ]
 
 export default function AliskanlikPage() {
-  const [tab,  setTab]  = useState<TabId>('hafta')
-  const [logs, setLogs] = useState<LogStore>({})
+  const [tab,     setTab]     = useState<TabId>('hafta')
+  const [habits,  setHabits]  = useState<Habit[]>([])
+  const [logs,    setLogs]    = useState<LogStore>({})
+  const [loading, setLoading] = useState(true)
   const today = todayISO()
 
   useEffect(() => {
-    dbLoadHabitLogs().then(setLogs).catch(() => {})
+    Promise.all([
+      dbLoadHabits(),
+      dbLoadHabitLogs(),
+    ]).then(([h, l]) => {
+      setHabits(h)
+      setLogs(l)
+    }).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   const toggle = useCallback((date: string, habitId: string) => {
@@ -422,11 +426,26 @@ export default function AliskanlikPage() {
     })
   }, [])
 
-  // header stats
-  const todayDone  = HABITS.filter((h) => logs[logKey(today, h.id)]).length
-  const todayPct   = Math.round((todayDone / HABITS.length) * 100)
-  const wkDays     = weekDates(new Date(today))
-  const weekPct    = rate(wkDays, HABITS, logs)
+  const todayDone = habits.filter((h) => logs[logKey(today, h.id)]).length
+  const todayPct  = habits.length ? Math.round((todayDone / habits.length) * 100) : 0
+  const wkDays    = weekDates(new Date(today))
+  const weekPct   = rate(wkDays, habits, logs)
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="flex gap-1.5">
+          {[0, 1, 2].map((i) => (
+            <span
+              key={i}
+              className="w-1.5 h-1.5 rounded-full bg-gold/50 animate-bounce"
+              style={{ animationDelay: `${i * 120}ms` }}
+            />
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -439,7 +458,7 @@ export default function AliskanlikPage() {
               <h1 className="font-display text-2xl font-semibold text-foreground">Alışkanlık</h1>
               <p className="text-sm text-muted mt-1">
                 Bugün{' '}
-                <span className="text-gold font-medium">{todayDone}/{HABITS.length}</span>
+                <span className="text-gold font-medium">{todayDone}/{habits.length}</span>
                 {' '}· Haftalık{' '}
                 <span
                   className="font-medium"
@@ -452,8 +471,9 @@ export default function AliskanlikPage() {
 
             {/* quick toggle: today's habit icons */}
             <div className="flex items-center gap-1 flex-wrap justify-end max-w-[260px] shrink-0">
-              {HABITS.map((h) => {
-                const on = !!logs[logKey(today, h.id)]
+              {habits.map((h) => {
+                const on    = !!logs[logKey(today, h.id)]
+                const color = habitColor(h.id)
                 return (
                   <button
                     key={h.id}
@@ -461,12 +481,12 @@ export default function AliskanlikPage() {
                     title={h.name}
                     className="w-7 h-7 rounded-full flex items-center justify-center text-sm leading-none transition-all duration-150"
                     style={{
-                      background: on ? `${h.color}28` : 'transparent',
-                      border: `1.5px solid ${on ? h.color : '#1c2433'}`,
+                      background: on ? `${color}28` : 'transparent',
+                      border: `1.5px solid ${on ? color : '#1c2433'}`,
                       opacity: on ? 1 : 0.45,
                     }}
                   >
-                    {h.icon}
+                    {h.emoji}
                   </button>
                 )
               })}
@@ -508,9 +528,9 @@ export default function AliskanlikPage() {
 
           {/* ── Content ── */}
           <div className="bg-surface border border-border rounded-2xl p-5">
-            {tab === 'hafta' && <WeekTab  logs={logs} toggle={toggle} today={today} />}
-            {tab === 'ay'    && <MonthTab logs={logs} toggle={toggle} today={today} />}
-            {tab === 'yil'   && <YearTab  logs={logs} today={today} />}
+            {tab === 'hafta' && <WeekTab  habits={habits} logs={logs} toggle={toggle} today={today} />}
+            {tab === 'ay'    && <MonthTab habits={habits} logs={logs} toggle={toggle} today={today} />}
+            {tab === 'yil'   && <YearTab  habits={habits} logs={logs} today={today} />}
           </div>
 
         </div>

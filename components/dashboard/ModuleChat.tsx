@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from 'react'
 import type { ModuleItem } from '@/lib/modules'
 import { parseAction } from '@/lib/modules'
-import { dbExecuteAction } from '@/lib/db'
+
+
 
 type Msg = { id: string; role: 'user' | 'assistant'; content: string }
 
@@ -67,7 +68,11 @@ export default function ModuleChat({ module }: { module: ModuleItem }) {
       const { clean, action } = parseAction(full)
       setMessages(prev => prev.map(m => m.id === aId ? { ...m, content: clean } : m))
       if (action) {
-        await dbExecuteAction(action).catch((err) => console.error('[Reborn ModuleChat] db error:', err))
+        await fetch('/api/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ actions: [action] }),
+        }).catch((err) => console.error('[Reborn ModuleChat] action error:', err))
         window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
       }
     } catch (err) {

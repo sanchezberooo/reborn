@@ -40,7 +40,7 @@ function getSubtitle(module: ModuleItem): string {
 export default function ModuleWidget({ module }: Props) {
   return (
     <Link
-      href={`/dashboard/${module.id}`}
+      href={module.id === 'english' ? '/ingilizce' : `/dashboard/${module.id}`}
       className="bg-surface border border-border rounded-2xl p-5 hover:border-gold transition-all duration-150 cursor-pointer group block"
     >
       <div

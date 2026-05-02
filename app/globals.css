@@ -23,7 +23,22 @@
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
   --color-border: var(--border);
-  --color-muted: var(--text-muted);
+  --color-muted: var(--surface-3);
+  --color-muted-foreground: var(--text-muted);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--foreground);
+  --color-popover: var(--surface-2);
+  --color-popover-foreground: var(--foreground);
+  --color-primary: var(--gold);
+  --color-primary-foreground: #1a1209;
+  --color-secondary: var(--surface-2);
+  --color-secondary-foreground: var(--foreground);
+  --color-accent: var(--surface-2);
+  --color-accent-foreground: var(--foreground);
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #ffffff;
+  --color-ring: var(--gold);
+  --color-input: var(--border);
   --font-display: var(--font-playfair);
   --font-sans: var(--font-inter);
 }
@@ -57,3 +72,8 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+.perspective-1000 { perspective: 1000px; }
+.transform-style-preserve-3d { transform-style: preserve-3d; }
+.backface-hidden { backface-visibility: hidden; }
+.rotate-y-180 { transform: rotateY(180deg); }

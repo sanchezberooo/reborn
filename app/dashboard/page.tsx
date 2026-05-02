@@ -97,7 +97,7 @@ function GunlukCard({ mod }: { mod: ModuleItem | null }) {
   const last    = entries[entries.length - 1]
 
   return (
-    <Card href="/dashboard/daily" color="#c86e9a" icon="📓" title="Günlük">
+    <Card href="/gunluk" color="#c86e9a" icon="📓" title="Günlük">
       {todayEntry ? (
         <>
           <p className="text-2xl leading-none">{todayEntry.mood ?? '—'}</p>

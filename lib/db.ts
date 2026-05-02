@@ -13,11 +13,14 @@ function uid(): string {
 
 export async function dbLoadProfile(): Promise<BeroProfile> {
   const userId = uid()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', userId)
     .single()
+
+  // PGRST116 = row not found — return defaults. Any other error = connection problem.
+  if (error && error.code !== 'PGRST116') throw error
 
   const defaults = (await import('./memory')).DEFAULT_PROFILE
   if (!data) return defaults
@@ -38,20 +41,24 @@ export async function dbLoadProfile(): Promise<BeroProfile> {
 
 export async function dbSaveProfile(profile: Partial<BeroProfile>): Promise<void> {
   const userId = uid()
-  await supabase.from('profiles').upsert({ id: userId, ...profile, updated_at: new Date().toISOString() })
+  const { error } = await supabase
+    .from('profiles')
+    .upsert({ id: userId, ...profile, updated_at: new Date().toISOString() })
+  if (error) throw error
 }
 
 // ─── Memories ─────────────────────────────────────────────────────────────────
 
 export async function dbLoadMemories(): Promise<import('./memory').Memory[]> {
   const userId = uid()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('memories')
     .select('id, summary, date')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
-    .limit(20)
+    .limit(5)
 
+  if (error) throw error
   return (data ?? []) as import('./memory').Memory[]
 }
 
@@ -60,7 +67,8 @@ export async function dbSaveMemory(summary: string): Promise<void> {
   const date = new Date().toLocaleDateString('tr-TR', {
     day: 'numeric', month: 'long', year: 'numeric',
   })
-  await supabase.from('memories').insert({ user_id: userId, summary, date })
+  const { error } = await supabase.from('memories').insert({ user_id: userId, summary, date })
+  if (error) throw error
 }
 
 // ─── Conversations ────────────────────────────────────────────────────────────
@@ -78,29 +86,53 @@ export async function dbSaveConversation(
   title: string,
   messages: ConversationMessage[]
 ): Promise<void> {
-  await supabase.from('conversations').upsert({ id: sessionId, title, messages })
+  const { error } = await supabase.from('conversations').upsert({ id: sessionId, title, messages })
+  if (error) throw error
 }
 
 export async function dbLoadConversations(): Promise<ConversationMeta[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('conversations')
     .select('id, title, created_at')
     .order('created_at', { ascending: false })
     .limit(50)
+  if (error) throw error
   return (data ?? []) as ConversationMeta[]
 }
 
 export async function dbLoadConversation(id: string): Promise<ConversationMessage[] | null> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('conversations')
     .select('messages')
     .eq('id', id)
     .single()
+  if (error && error.code !== 'PGRST116') throw error
   return (data?.messages as ConversationMessage[]) ?? null
 }
 
 export async function dbDeleteConversation(id: string): Promise<void> {
-  await supabase.from('conversations').delete().eq('id', id)
+  const { error } = await supabase.from('conversations').delete().eq('id', id)
+  if (error) throw error
+}
+
+// ─── Habits ───────────────────────────────────────────────────────────────────
+
+export interface Habit {
+  id: string
+  name: string
+  emoji: string
+  order_index: number
+  active: boolean
+}
+
+export async function dbLoadHabits(): Promise<Habit[]> {
+  const { data, error } = await supabase
+    .from('habits')
+    .select('id, name, emoji, order_index, active')
+    .eq('active', true)
+    .order('order_index', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as Habit[]
 }
 
 // ─── Habit Logs ───────────────────────────────────────────────────────────────
@@ -122,16 +154,18 @@ export async function dbLoadHabitLogs(): Promise<HabitLogStore> {
 
 export async function dbToggleHabitLog(date: string, habitId: string, on: boolean): Promise<void> {
   if (on) {
-    await supabase.from('habit_logs').upsert(
+    const { error } = await supabase.from('habit_logs').upsert(
       { user_id: uid(), date, habit_id: habitId, completed: true },
       { onConflict: 'user_id,date,habit_id' },
     )
+    if (error) throw error
   } else {
-    await supabase.from('habit_logs')
+    const { error } = await supabase.from('habit_logs')
       .delete()
       .eq('user_id', uid())
       .eq('date', date)
       .eq('habit_id', habitId)
+    if (error) throw error
   }
 }
 
@@ -148,19 +182,21 @@ function applyDbOrder(modules: ModuleItem[], order: string[]): ModuleItem[] {
 
 async function dbLoadModuleOrder(): Promise<string[]> {
   const userId = uid()
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('modules_order')
-    .select('order')
+    .select('order_data')
     .eq('user_id', userId)
     .single()
-  return (data?.order as string[]) ?? []
+  if (error && error.code !== 'PGRST116') throw error
+  return (data?.order_data as string[]) ?? []
 }
 
 export async function dbSaveModuleOrder(order: string[]): Promise<void> {
   const userId = uid()
-  await supabase
+  const { error } = await supabase
     .from('modules_order')
-    .upsert({ user_id: userId, order }, { onConflict: 'user_id' })
+    .upsert({ user_id: userId, order_data: order }, { onConflict: 'user_id' })
+  if (error) throw error
 }
 
 // ─── Modules ──────────────────────────────────────────────────────────────────
@@ -218,7 +254,8 @@ async function dbInitModules(userId: string): Promise<void> {
     color: m.color,
     data: m.data,
   }))
-  await supabase.from('modules').upsert(rows, { onConflict: 'id' })
+  const { error } = await supabase.from('modules').upsert(rows, { onConflict: 'id' })
+  if (error) throw error
 }
 
 // Merges missing default data keys into each module in Supabase without overwriting existing values
@@ -419,3 +456,75 @@ export async function dbRemoveItemFromField(
   return dbLoadModules()
 }
 
+// ─── Journal ──────────────────────────────────────────────────────────────────
+
+export interface JournalEntry {
+  id?: string
+  date: string
+  mood: number
+  day_score: number
+  question_1: string
+  answer_1: string
+  question_2: string
+  answer_2: string
+  free_write: string
+}
+
+export interface JournalQuestion {
+  id: string
+  question: string
+}
+
+export async function dbLoadJournalQuestions(): Promise<JournalQuestion[]> {
+  const { data, error } = await supabase
+    .from('journal_questions')
+    .select('id, question')
+    .order('id')
+  if (error) throw error
+  return (data ?? []) as JournalQuestion[]
+}
+
+export async function dbLoadJournalEntry(date: string): Promise<JournalEntry | null> {
+  const { data, error } = await supabase
+    .from('journal_entries')
+    .select('id, date, mood, day_score, question_1, answer_1, question_2, answer_2, free_write')
+    .eq('user_id', uid())
+    .eq('date', date)
+    .single()
+  if (error && error.code !== 'PGRST116') throw error
+  if (!data) return null
+  const d = data as Record<string, unknown>
+  return { ...d, date: String(d.date).slice(0, 10) } as unknown as JournalEntry
+}
+
+export async function dbSaveJournalEntry(entry: Omit<JournalEntry, 'id'>): Promise<void> {
+  const { error } = await supabase.from('journal_entries').upsert(
+    { ...entry, user_id: uid(), updated_at: new Date().toISOString() },
+    { onConflict: 'user_id,date' },
+  )
+  if (error) throw error
+}
+
+export async function dbLoadJournalDates(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('journal_entries')
+    .select('date')
+    .eq('user_id', uid())
+    .order('date', { ascending: false })
+  if (error) throw error
+  return (data ?? []).map((r) => String((r as Record<string, unknown>).date).slice(0, 10))
+}
+
+export async function dbLoadRecentJournalEntries(limit = 5): Promise<JournalEntry[]> {
+  const { data, error } = await supabase
+    .from('journal_entries')
+    .select('id, date, mood, day_score, free_write')
+    .eq('user_id', uid())
+    .order('date', { ascending: false })
+    .limit(limit)
+  if (error) throw error
+  return (data ?? []).map((r) => {
+    const d = r as Record<string, unknown>
+    return { ...d, date: String(d.date).slice(0, 10) }
+  }) as unknown as JournalEntry[]
+}

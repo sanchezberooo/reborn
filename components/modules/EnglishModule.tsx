@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { dbLoadModules, dbExecuteAction } from '@/lib/db'
+import { dbLoadModules } from '@/lib/db'
 import type { ModuleItem, ActionType } from '@/lib/modules'
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -70,7 +70,11 @@ export default function EnglishModule({ moduleId }: { moduleId: string }) {
   }, [moduleId])
 
   async function act(action: ActionType) {
-    await dbExecuteAction(action).catch(() => {})
+    await fetch('/api/action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actions: [action] }),
+    }).catch(() => {})
     window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
   }
 
