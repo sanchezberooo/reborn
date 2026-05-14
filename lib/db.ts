@@ -1,47 +1,50 @@
-import { supabase } from './supabase'
+import { getSupabaseBrowser } from './supabase'
 import type { BeroProfile } from './memory'
 import type { ModuleItem, ActionType } from './modules'
 import { DEFAULT_MODULES, migrateModule } from './modules'
 
-const BERO_ID = process.env.NEXT_PUBLIC_BERO_ID ?? '00000000-0000-0000-0000-000000000001'
+function db() {
+  return getSupabaseBrowser()
+}
 
-function uid(): string {
-  return BERO_ID
+async function uid(): Promise<string> {
+  const { data: { user } } = await db().auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  return user.id
 }
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
 export async function dbLoadProfile(): Promise<BeroProfile> {
-  const userId = uid()
-  const { data, error } = await supabase
+  const userId = await uid()
+  const { data, error } = await db()
     .from('profiles')
     .select('*')
     .eq('id', userId)
     .single()
 
-  // PGRST116 = row not found — return defaults. Any other error = connection problem.
   if (error && error.code !== 'PGRST116') throw error
 
   const defaults = (await import('./memory')).DEFAULT_PROFILE
   if (!data) return defaults
   return {
-    name: data.name ?? defaults.name,
-    age: data.age ?? defaults.age,
-    location: data.location ?? defaults.location,
-    goal: data.goal ?? defaults.goal,
-    ielts_target: data.ielts_target ?? defaults.ielts_target,
-    ielts_exam: data.ielts_exam ?? data.ielts_date ?? defaults.ielts_exam,
-    project: data.project ?? defaults.project,
+    name:                 data.name                 ?? defaults.name,
+    age:                  data.age                  ?? defaults.age,
+    location:             data.location             ?? defaults.location,
+    goal:                 data.goal                 ?? defaults.goal,
+    ielts_target:         data.ielts_target         ?? defaults.ielts_target,
+    ielts_exam:           data.ielts_exam           ?? data.ielts_date ?? defaults.ielts_exam,
+    project:              data.project              ?? defaults.project,
     application_deadline: data.application_deadline ?? defaults.application_deadline,
-    universities: data.universities ?? defaults.universities,
-    strengths: data.strengths ?? defaults.strengths,
-    weaknesses: data.weaknesses ?? defaults.weaknesses,
+    universities:         data.universities         ?? defaults.universities,
+    strengths:            data.strengths            ?? defaults.strengths,
+    weaknesses:           data.weaknesses           ?? defaults.weaknesses,
   }
 }
 
 export async function dbSaveProfile(profile: Partial<BeroProfile>): Promise<void> {
-  const userId = uid()
-  const { error } = await supabase
+  const userId = await uid()
+  const { error } = await db()
     .from('profiles')
     .upsert({ id: userId, ...profile, updated_at: new Date().toISOString() })
   if (error) throw error
@@ -50,8 +53,8 @@ export async function dbSaveProfile(profile: Partial<BeroProfile>): Promise<void
 // ─── Memories ─────────────────────────────────────────────────────────────────
 
 export async function dbLoadMemories(): Promise<import('./memory').Memory[]> {
-  const userId = uid()
-  const { data, error } = await supabase
+  const userId = await uid()
+  const { data, error } = await db()
     .from('memories')
     .select('id, summary, date')
     .eq('user_id', userId)
@@ -63,11 +66,11 @@ export async function dbLoadMemories(): Promise<import('./memory').Memory[]> {
 }
 
 export async function dbSaveMemory(summary: string): Promise<void> {
-  const userId = uid()
+  const userId = await uid()
   const date = new Date().toLocaleDateString('tr-TR', {
     day: 'numeric', month: 'long', year: 'numeric',
   })
-  const { error } = await supabase.from('memories').insert({ user_id: userId, summary, date })
+  const { error } = await db().from('memories').insert({ user_id: userId, summary, date })
   if (error) throw error
 }
 
@@ -86,14 +89,20 @@ export async function dbSaveConversation(
   title: string,
   messages: ConversationMessage[]
 ): Promise<void> {
-  const { error } = await supabase.from('conversations').upsert({ id: sessionId, title, messages })
+  const userId = await uid()
+  const { error } = await db().from('conversations').upsert(
+    { id: sessionId, title, messages, user_id: userId },
+    { onConflict: 'id' }
+  )
   if (error) throw error
 }
 
 export async function dbLoadConversations(): Promise<ConversationMeta[]> {
-  const { data, error } = await supabase
+  const userId = await uid()
+  const { data, error } = await db()
     .from('conversations')
     .select('id, title, created_at')
+    .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(50)
   if (error) throw error
@@ -101,7 +110,7 @@ export async function dbLoadConversations(): Promise<ConversationMeta[]> {
 }
 
 export async function dbLoadConversation(id: string): Promise<ConversationMessage[] | null> {
-  const { data, error } = await supabase
+  const { data, error } = await db()
     .from('conversations')
     .select('messages')
     .eq('id', id)
@@ -111,7 +120,7 @@ export async function dbLoadConversation(id: string): Promise<ConversationMessag
 }
 
 export async function dbDeleteConversation(id: string): Promise<void> {
-  const { error } = await supabase.from('conversations').delete().eq('id', id)
+  const { error } = await db().from('conversations').delete().eq('id', id)
   if (error) throw error
 }
 
@@ -126,9 +135,11 @@ export interface Habit {
 }
 
 export async function dbLoadHabits(): Promise<Habit[]> {
-  const { data, error } = await supabase
+  const userId = await uid()
+  const { data, error } = await db()
     .from('habits')
     .select('id, name, emoji, order_index, active')
+    .eq('user_id', userId)
     .eq('active', true)
     .order('order_index', { ascending: true })
   if (error) throw error
@@ -137,13 +148,14 @@ export async function dbLoadHabits(): Promise<Habit[]> {
 
 // ─── Habit Logs ───────────────────────────────────────────────────────────────
 
-export type HabitLogStore = Record<string, boolean> // `${YYYY-MM-DD}|${habitId}` → true
+export type HabitLogStore = Record<string, boolean>
 
 export async function dbLoadHabitLogs(): Promise<HabitLogStore> {
-  const { data, error } = await supabase
+  const userId = await uid()
+  const { data, error } = await db()
     .from('habit_logs')
     .select('date, habit_id, completed')
-    .eq('user_id', uid())
+    .eq('user_id', userId)
 
   if (error) throw error
 
@@ -153,16 +165,17 @@ export async function dbLoadHabitLogs(): Promise<HabitLogStore> {
 }
 
 export async function dbToggleHabitLog(date: string, habitId: string, on: boolean): Promise<void> {
+  const userId = await uid()
   if (on) {
-    const { error } = await supabase.from('habit_logs').upsert(
-      { user_id: uid(), date, habit_id: habitId, completed: true },
+    const { error } = await db().from('habit_logs').upsert(
+      { user_id: userId, date, habit_id: habitId, completed: true },
       { onConflict: 'user_id,date,habit_id' },
     )
     if (error) throw error
   } else {
-    const { error } = await supabase.from('habit_logs')
+    const { error } = await db().from('habit_logs')
       .delete()
-      .eq('user_id', uid())
+      .eq('user_id', userId)
       .eq('date', date)
       .eq('habit_id', habitId)
     if (error) throw error
@@ -181,8 +194,8 @@ function applyDbOrder(modules: ModuleItem[], order: string[]): ModuleItem[] {
 }
 
 async function dbLoadModuleOrder(): Promise<string[]> {
-  const userId = uid()
-  const { data, error } = await supabase
+  const userId = await uid()
+  const { data, error } = await db()
     .from('modules_order')
     .select('order_data')
     .eq('user_id', userId)
@@ -192,8 +205,8 @@ async function dbLoadModuleOrder(): Promise<string[]> {
 }
 
 export async function dbSaveModuleOrder(order: string[]): Promise<void> {
-  const userId = uid()
-  const { error } = await supabase
+  const userId = await uid()
+  const { error } = await db()
     .from('modules_order')
     .upsert({ user_id: userId, order_data: order }, { onConflict: 'user_id' })
   if (error) throw error
@@ -202,9 +215,9 @@ export async function dbSaveModuleOrder(order: string[]): Promise<void> {
 // ─── Modules ──────────────────────────────────────────────────────────────────
 
 export async function dbLoadModules(): Promise<ModuleItem[]> {
-  const userId = uid()
+  const userId = await uid()
   const [{ data, error }, order] = await Promise.all([
-    supabase.from('modules').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
+    db().from('modules').select('*').eq('user_id', userId).order('created_at', { ascending: true }),
     dbLoadModuleOrder().catch(() => [] as string[]),
   ])
 
@@ -223,9 +236,8 @@ export async function dbLoadModules(): Promise<ModuleItem[]> {
     return applyDbOrder(mods, order)
   }
 
-  // Empty — seed defaults then re-fetch
   await dbInitModules(userId)
-  const { data: fresh, error: freshError } = await supabase
+  const { data: fresh, error: freshError } = await db()
     .from('modules')
     .select('*')
     .eq('user_id', userId)
@@ -254,15 +266,14 @@ async function dbInitModules(userId: string): Promise<void> {
     color: m.color,
     data: m.data,
   }))
-  const { error } = await supabase.from('modules').upsert(rows, { onConflict: 'id' })
+  const { error } = await db().from('modules').upsert(rows, { onConflict: 'id' })
   if (error) throw error
 }
 
-// Merges missing default data keys into each module in Supabase without overwriting existing values
 export async function dbMigrateModules(): Promise<void> {
-  const userId = uid()
+  const userId = await uid()
   const now = new Date().toISOString()
-  const { data, error } = await supabase
+  const { data, error } = await db()
     .from('modules')
     .select('*')
     .eq('user_id', userId)
@@ -290,7 +301,7 @@ export async function dbMigrateModules(): Promise<void> {
     }
   })
 
-  await supabase.from('modules').upsert(rows, { onConflict: 'id' })
+  await db().from('modules').upsert(rows, { onConflict: 'id' })
 }
 
 function dbNameOf(item: unknown): string {
@@ -302,7 +313,7 @@ function dbNameOf(item: unknown): string {
 }
 
 async function dbGetModuleData(userId: string, id: string): Promise<Record<string, unknown>> {
-  const { data: row } = await supabase
+  const { data: row } = await db()
     .from('modules')
     .select('data')
     .eq('user_id', userId)
@@ -319,20 +330,20 @@ async function dbPatchModuleData(
   existing?: Record<string, unknown>
 ): Promise<void> {
   const base = existing ?? await dbGetModuleData(userId, id)
-  await supabase.from('modules')
+  await db().from('modules')
     .update({ data: { ...base, ...patch }, updated_at: now })
     .eq('user_id', userId)
     .eq('id', id)
 }
 
 export async function dbExecuteAction(action: ActionType): Promise<ModuleItem[]> {
-  const userId = uid()
+  const userId = await uid()
   const now = new Date().toISOString()
 
   switch (action.type) {
     case 'CREATE_MODULE': {
       const { id, name, icon, color, data } = action.payload
-      await supabase.from('modules').upsert(
+      await db().from('modules').upsert(
         { id, user_id: userId, name, icon, color, data: data ?? {}, updated_at: now },
         { onConflict: 'id', ignoreDuplicates: true }
       )
@@ -341,7 +352,7 @@ export async function dbExecuteAction(action: ActionType): Promise<ModuleItem[]>
 
     case 'DELETE_MODULE':
     case 'REMOVE_MODULE': {
-      await supabase.from('modules').delete().eq('user_id', userId).eq('id', action.payload.id)
+      await db().from('modules').delete().eq('user_id', userId).eq('id', action.payload.id)
       break
     }
 
@@ -350,7 +361,7 @@ export async function dbExecuteAction(action: ActionType): Promise<ModuleItem[]>
       if (action.payload.name  !== undefined) meta.name  = action.payload.name
       if (action.payload.icon  !== undefined) meta.icon  = action.payload.icon
       if (action.payload.color !== undefined) meta.color = action.payload.color
-      await supabase.from('modules').update(meta).eq('user_id', userId).eq('id', action.payload.id)
+      await db().from('modules').update(meta).eq('user_id', userId).eq('id', action.payload.id)
       break
     }
 
@@ -412,8 +423,8 @@ export async function dbAddItemToField(
   field: string,
   item: unknown
 ): Promise<ModuleItem[]> {
-  const userId = uid()
-  const { data: row } = await supabase
+  const userId = await uid()
+  const { data: row } = await db()
     .from('modules')
     .select('data')
     .eq('user_id', userId)
@@ -423,7 +434,7 @@ export async function dbAddItemToField(
   const existing = ((row?.data as Record<string, unknown>)?.[field] as unknown[]) ?? []
   const patch = { [field]: [...existing, item] }
 
-  await supabase.from('modules')
+  await db().from('modules')
     .update({ data: { ...(row?.data ?? {}), ...patch }, updated_at: new Date().toISOString() })
     .eq('user_id', userId)
     .eq('id', moduleId)
@@ -436,8 +447,8 @@ export async function dbRemoveItemFromField(
   field: string,
   index: number
 ): Promise<ModuleItem[]> {
-  const userId = uid()
-  const { data: row } = await supabase
+  const userId = await uid()
+  const { data: row } = await db()
     .from('modules')
     .select('data')
     .eq('user_id', userId)
@@ -448,7 +459,7 @@ export async function dbRemoveItemFromField(
   existing.splice(index, 1)
   const patch = { [field]: existing }
 
-  await supabase.from('modules')
+  await db().from('modules')
     .update({ data: { ...(row?.data ?? {}), ...patch }, updated_at: new Date().toISOString() })
     .eq('user_id', userId)
     .eq('id', moduleId)
@@ -476,7 +487,7 @@ export interface JournalQuestion {
 }
 
 export async function dbLoadJournalQuestions(): Promise<JournalQuestion[]> {
-  const { data, error } = await supabase
+  const { data, error } = await db()
     .from('journal_questions')
     .select('id, question')
     .order('id')
@@ -485,10 +496,11 @@ export async function dbLoadJournalQuestions(): Promise<JournalQuestion[]> {
 }
 
 export async function dbLoadJournalEntry(date: string): Promise<JournalEntry | null> {
-  const { data, error } = await supabase
+  const userId = await uid()
+  const { data, error } = await db()
     .from('journal_entries')
     .select('id, date, mood, day_score, question_1, answer_1, question_2, answer_2, free_write')
-    .eq('user_id', uid())
+    .eq('user_id', userId)
     .eq('date', date)
     .single()
   if (error && error.code !== 'PGRST116') throw error
@@ -498,28 +510,31 @@ export async function dbLoadJournalEntry(date: string): Promise<JournalEntry | n
 }
 
 export async function dbSaveJournalEntry(entry: Omit<JournalEntry, 'id'>): Promise<void> {
-  const { error } = await supabase.from('journal_entries').upsert(
-    { ...entry, user_id: uid(), updated_at: new Date().toISOString() },
+  const userId = await uid()
+  const { error } = await db().from('journal_entries').upsert(
+    { ...entry, user_id: userId, updated_at: new Date().toISOString() },
     { onConflict: 'user_id,date' },
   )
   if (error) throw error
 }
 
 export async function dbLoadJournalDates(): Promise<string[]> {
-  const { data, error } = await supabase
+  const userId = await uid()
+  const { data, error } = await db()
     .from('journal_entries')
     .select('date')
-    .eq('user_id', uid())
+    .eq('user_id', userId)
     .order('date', { ascending: false })
   if (error) throw error
   return (data ?? []).map((r) => String((r as Record<string, unknown>).date).slice(0, 10))
 }
 
 export async function dbLoadRecentJournalEntries(limit = 5): Promise<JournalEntry[]> {
-  const { data, error } = await supabase
+  const userId = await uid()
+  const { data, error } = await db()
     .from('journal_entries')
     .select('id, date, mood, day_score, free_write')
-    .eq('user_id', uid())
+    .eq('user_id', userId)
     .order('date', { ascending: false })
     .limit(limit)
   if (error) throw error

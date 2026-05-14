@@ -558,9 +558,9 @@ export const achievements: Achievement[] = [
 
 // Kullanici ilerlemesi
 export const initialProgress: UserProgress = {
-  level: 'A1',
+  level: 'B1',
   xp: 2450,
-  streak: 7,
+  streak: 3,
   wordsLearned: 245,
   grammarCompleted: 12,
   idiomsLearned: 28,
@@ -577,7 +577,7 @@ export const initialProgress: UserProgress = {
 // Seviye bilgileri
 export const levelInfo = {
   A1: { name: 'Beginner', nameTr: 'Başlangıç', xpRequired: 0, color: 'bg-green-500' },
-  A2: { name: 'Elementary', nameTr: 'Temel', xpRequired: 3550, color: 'bg-lime-500' },
+  A2: { name: 'Elementary', nameTr: 'Temel', xpRequired: 1000, color: 'bg-lime-500' },
   B1: { name: 'Intermediate', nameTr: 'Orta', xpRequired: 3000, color: 'bg-yellow-500' },
   B2: { name: 'Upper Intermediate', nameTr: 'Orta Üstü', xpRequired: 6000, color: 'bg-orange-500' },
   C1: { name: 'Advanced', nameTr: 'Ileri', xpRequired: 10000, color: 'bg-red-500' },

@@ -159,7 +159,7 @@ function AgentModal({ agent, color, onClose, onDetail }: {
   const [task, setTask] = useState('')
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/65 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative bg-background border border-border rounded-2xl p-6 w-full max-w-md shadow-2xl"
         style={{ borderTopColor: color, borderTopWidth: '2px' }}
@@ -230,7 +230,7 @@ function DetailModal({ agent, color, onClose }: {
 }) {
   return (
     <div className="fixed inset-0 z-50 flex" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative ml-auto h-full bg-background border-l border-border w-full max-w-lg overflow-y-auto shadow-2xl"
         onClick={(e) => e.stopPropagation()}

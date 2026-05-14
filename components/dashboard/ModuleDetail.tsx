@@ -127,7 +127,7 @@ export default function ModuleDetail({ moduleId }: { moduleId: string }) {
         <div className="px-6 py-6 max-w-xl mx-auto flex flex-col gap-6">
 
           {stringFields.length > 0 && (
-            <div className="bg-surface border border-border rounded-2xl p-4 flex flex-wrap gap-4">
+            <div className="bg-surface border border-border rounded-lg p-4 flex flex-wrap gap-4">
               {stringFields.map((f) => (
                 <div key={f.label}>
                   <p className="text-[10px] text-muted uppercase tracking-wider mb-0.5">{f.label}</p>
@@ -138,7 +138,7 @@ export default function ModuleDetail({ moduleId }: { moduleId: string }) {
           )}
 
           {notes && (
-            <div className="bg-surface border border-border rounded-2xl p-4">
+            <div className="bg-surface border border-border rounded-lg p-4">
               <p className="text-[10px] text-muted uppercase tracking-wider mb-2">Notlar</p>
               <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{notes}</p>
             </div>
@@ -163,7 +163,7 @@ export default function ModuleDetail({ moduleId }: { moduleId: string }) {
                         .filter(Boolean).map(String).join(' · ')
                     : ''
                   return (
-                    <li key={i} className="flex items-start gap-3 bg-surface border border-border rounded-xl px-4 py-3 group">
+                    <li key={i} className="flex items-start gap-3 bg-surface border border-border border-l-[3px] rounded-lg px-4 py-3 group" style={{ borderLeftColor: module.color }}>
                       <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5" style={{ background: module.color }} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-foreground leading-snug">{label}</p>

@@ -106,7 +106,7 @@ function Check({ on, color, onChange }: { on: boolean; color: string; onChange: 
       onClick={onChange}
       className="w-6 h-6 rounded-md border flex items-center justify-center transition-all duration-100 shrink-0 mx-auto"
       style={{
-        borderColor: on ? color : '#1c2433',
+        borderColor: on ? color : '#2a2a2a',
         background: on ? `${color}22` : 'transparent',
       }}
     >
@@ -454,19 +454,65 @@ export default function AliskanlikPage() {
 
           {/* ── Header ── */}
           <div className="flex items-start justify-between gap-4 mb-5">
-            <div>
-              <h1 className="font-display text-2xl font-semibold text-foreground">Alışkanlık</h1>
-              <p className="text-sm text-muted mt-1">
-                Bugün{' '}
-                <span className="text-gold font-medium">{todayDone}/{habits.length}</span>
-                {' '}· Haftalık{' '}
-                <span
-                  className="font-medium"
-                  style={{ color: weekPct >= 70 ? '#6ec8a9' : weekPct >= 40 ? '#c8a96e' : '#c86e6e' }}
-                >
-                  {weekPct}%
-                </span>
-              </p>
+            <div className="flex items-center gap-6">
+              {/* Halka grafik */}
+              {(() => {
+                const r = 30, sw = 6, circumference = 2 * Math.PI * r
+                const ringColor = weekPct >= 70 ? '#6ec8a9' : weekPct >= 40 ? '#c8a96e' : '#c86e6e'
+                const todayColor = todayPct >= 70 ? '#6ec8a9' : todayPct >= 40 ? '#c8a96e' : '#c86e6e'
+                return (
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    {/* Haftalık halka */}
+                    <div style={{ position: 'relative', width: 72, height: 72, flexShrink: 0 }}>
+                      <svg width="72" height="72" viewBox="0 0 72 72" style={{ transform: 'rotate(-90deg)' }}>
+                        <circle cx="36" cy="36" r={r} fill="none" stroke="#1e1e1e" strokeWidth={sw} />
+                        <circle
+                          cx="36" cy="36" r={r} fill="none"
+                          stroke={ringColor} strokeWidth={sw}
+                          strokeLinecap="round"
+                          strokeDasharray={`${circumference * weekPct / 100} ${circumference}`}
+                          style={{ transition: 'stroke-dasharray 0.5s ease' }}
+                        />
+                      </svg>
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: ringColor, lineHeight: 1 }}>{weekPct}%</span>
+                        <span style={{ fontSize: 8, color: '#555', marginTop: 2 }}>hafta</span>
+                      </div>
+                    </div>
+                    {/* Bugünkü halka */}
+                    <div style={{ position: 'relative', width: 52, height: 52, flexShrink: 0 }}>
+                      <svg width="52" height="52" viewBox="0 0 52 52" style={{ transform: 'rotate(-90deg)' }}>
+                        <circle cx="26" cy="26" r="20" fill="none" stroke="#1e1e1e" strokeWidth={5} />
+                        <circle
+                          cx="26" cy="26" r="20" fill="none"
+                          stroke={todayColor} strokeWidth={5}
+                          strokeLinecap="round"
+                          strokeDasharray={`${2 * Math.PI * 20 * todayPct / 100} ${2 * Math.PI * 20}`}
+                          style={{ transition: 'stroke-dasharray 0.5s ease' }}
+                        />
+                      </svg>
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: todayColor, lineHeight: 1 }}>{todayPct}%</span>
+                        <span style={{ fontSize: 7, color: '#555', marginTop: 1 }}>bugün</span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+              <div>
+                <h1 className="font-display text-2xl font-semibold text-foreground">Alışkanlık</h1>
+                <p className="text-sm text-muted mt-1">
+                  Bugün{' '}
+                  <span className="text-gold font-medium">{todayDone}/{habits.length}</span>
+                  {' '}· Haftalık{' '}
+                  <span
+                    className="font-medium"
+                    style={{ color: weekPct >= 70 ? '#6ec8a9' : weekPct >= 40 ? '#c8a96e' : '#c86e6e' }}
+                  >
+                    {weekPct}%
+                  </span>
+                </p>
+              </div>
             </div>
 
             {/* quick toggle: today's habit icons */}
@@ -482,7 +528,7 @@ export default function AliskanlikPage() {
                     className="w-7 h-7 rounded-full flex items-center justify-center text-sm leading-none transition-all duration-150"
                     style={{
                       background: on ? `${color}28` : 'transparent',
-                      border: `1.5px solid ${on ? color : '#1c2433'}`,
+                      border: `1.5px solid ${on ? color : '#2a2a2a'}`,
                       opacity: on ? 1 : 0.45,
                     }}
                   >

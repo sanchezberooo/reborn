@@ -41,7 +41,8 @@ export default function ModuleWidget({ module }: Props) {
   return (
     <Link
       href={module.id === 'english' ? '/ingilizce' : `/dashboard/${module.id}`}
-      className="bg-surface border border-border rounded-2xl p-5 hover:border-gold transition-all duration-150 cursor-pointer group block"
+      className="bg-surface border border-border border-l-[3px] rounded-lg p-5 hover:bg-surface-3 transition-all duration-150 cursor-pointer group block"
+      style={{ borderLeftColor: module.color }}
     >
       <div
         className="w-10 h-10 rounded-xl flex items-center justify-center text-xl mb-4"

@@ -31,7 +31,7 @@ export const DEFAULT_MODULES: ModuleItem[] = [
     id: 'scholarship',
     name: 'Burs & Üniversite',
     icon: '🏫',
-    color: '#c8a96e',
+    color: '#c8a96e', // gold
     data: {
       universities: [],
       essays: [],
@@ -46,7 +46,7 @@ export const DEFAULT_MODULES: ModuleItem[] = [
     id: 'english',
     name: 'İngilizce / IELTS',
     icon: '📚',
-    color: '#6eb5c8',
+    color: '#8b5cf6',
     data: {
       ielts_target: '7.0+',
       ielts_date: 'Eylül 2026',
@@ -82,7 +82,7 @@ export const DEFAULT_MODULES: ModuleItem[] = [
     id: 'daily',
     name: 'Günlük',
     icon: '📓',
-    color: '#c86e9a',
+    color: '#f59e0b',
     data: {
       entries: [],
       today: {},
@@ -94,7 +94,7 @@ export const DEFAULT_MODULES: ModuleItem[] = [
     id: 'roadmap',
     name: 'Yol Haritası',
     icon: '🗺️',
-    color: '#8ec86e',
+    color: '#06b6d4',
     data: {
       milestones: [],
       current_focus: '',
@@ -106,7 +106,7 @@ export const DEFAULT_MODULES: ModuleItem[] = [
     id: 'habits',
     name: 'Alışkanlık',
     icon: '🔥',
-    color: '#c8956e',
+    color: '#ef4444',
     data: {
       habits: [],
       logs: [],
@@ -118,7 +118,7 @@ export const DEFAULT_MODULES: ModuleItem[] = [
     id: 'finance',
     name: 'Finans',
     icon: '💰',
-    color: '#6ec8a9',
+    color: '#22c55e',
     data: {
       income: [],
       expenses: [],
@@ -133,7 +133,7 @@ export const DEFAULT_MODULES: ModuleItem[] = [
     id: 'body',
     name: 'Beden',
     icon: '⚡',
-    color: '#956ec8',
+    color: '#3b82f6',
     data: {
       workouts: [],
       nutrition: [],
@@ -147,7 +147,7 @@ export const DEFAULT_MODULES: ModuleItem[] = [
     id: 'discover',
     name: 'Keşif',
     icon: '🔭',
-    color: '#c86e6e',
+    color: '#f97316',
     data: {
       books: [],
       courses: [],

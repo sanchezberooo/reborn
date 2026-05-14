@@ -79,7 +79,7 @@ export default function GunlukPage() {
     Promise.all([
       dbLoadJournalDates(),
       dbLoadJournalQuestions(),
-      dbLoadRecentJournalEntries(5),
+      dbLoadRecentJournalEntries(7),
     ]).then(([dates, qs, recent]) => {
       setFilledDates(new Set(dates))
       setQuestions(qs)
@@ -148,10 +148,82 @@ export default function GunlukPage() {
       <div className="max-w-5xl mx-auto px-6 py-10">
 
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="font-display text-3xl font-semibold text-foreground">Günlük</h1>
           <p className="text-sm text-muted mt-1">Düşüncelerini yaz, her günü belgele.</p>
         </div>
+
+        {/* Haftalık ruh hali grafiği */}
+        {(() => {
+          const today2 = new Date()
+          const days7 = Array.from({ length: 7 }, (_, i) => {
+            const d = new Date(today2)
+            d.setDate(today2.getDate() - (6 - i))
+            return d
+          })
+          const dayLabels = ['Pzt','Sal','Çar','Per','Cum','Cmt','Paz']
+          const maxH = 52
+          return (
+            <div
+              className="mb-8 rounded-2xl border border-border p-5"
+              style={{ background: '#111111', borderTopColor: '#c86e9a', borderTopWidth: '2px' }}
+            >
+              <p className="text-[10px] text-muted/50 uppercase tracking-widest font-medium mb-4">
+                Haftalık Ruh Hali
+              </p>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', height: maxH + 28 }}>
+                {days7.map((d, i) => {
+                  const iso = localISO(d)
+                  const entry = recentEntries.find((e) => e.date === iso)
+                  const moodVal = entry?.mood ?? 0
+                  const barH = moodVal > 0 ? Math.round((moodVal / 10) * maxH) : 4
+                  const isToday2 = iso === today
+                  const moodColor = moodVal === 0
+                    ? '#1e1e1e'
+                    : moodVal >= 8 ? '#22c55e'
+                    : moodVal >= 5 ? '#c8a96e'
+                    : '#ef4444'
+                  const dow = d.getDay() === 0 ? 6 : d.getDay() - 1
+                  return (
+                    <div
+                      key={iso}
+                      style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, cursor: 'pointer' }}
+                      onClick={() => setSelectedDate(iso)}
+                      title={moodVal > 0 ? `${iso}: Ruh hali ${moodVal}/10` : `${iso}: Kayıt yok`}
+                    >
+                      <span style={{ fontSize: 9, color: moodVal > 0 ? moodColor : '#333', fontWeight: 600 }}>
+                        {moodVal > 0 ? moodVal : ''}
+                      </span>
+                      <div
+                        style={{
+                          width: '100%',
+                          height: barH,
+                          background: moodColor,
+                          borderRadius: 4,
+                          opacity: moodVal === 0 ? 0.3 : 1,
+                          transition: 'height 0.3s ease',
+                          border: isToday2 ? `2px solid ${moodColor === '#1e1e1e' ? '#c8a96e' : moodColor}` : 'none',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                      <span style={{ fontSize: 9, color: isToday2 ? '#c8a96e' : '#555', fontWeight: isToday2 ? 700 : 400 }}>
+                        {dayLabels[dow]}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+              <div style={{ display: 'flex', gap: 16, marginTop: 10 }}>
+                {[['#22c55e', '8-10 İyi'],['#c8a96e', '5-7 Orta'],['#ef4444', '1-4 Zor']].map(([c, l]) => (
+                  <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: 2, background: c, display: 'inline-block' }} />
+                    <span style={{ fontSize: 10, color: '#555' }}>{l}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Main grid: form (2/3) | sidebar (1/3) */}
         <div className="grid grid-cols-3 gap-5 mb-10">

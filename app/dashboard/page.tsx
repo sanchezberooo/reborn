@@ -43,7 +43,7 @@ function Card({
     >
       <div className="flex items-center gap-2">
         <span className="text-base leading-none">{icon}</span>
-        <span className="text-[11px] font-semibold text-muted/60 uppercase tracking-wider">{title}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#ffffff' }}>{title}</span>
       </div>
       <div className="flex-1 flex flex-col justify-between gap-2">
         {children}
@@ -186,7 +186,7 @@ function IeltsCard({ mod }: { mod: ModuleItem | null }) {
   ))
 
   return (
-    <Card href="/dashboard/english" color="#6eb5c8" icon="📚" title="İngilizce / IELTS">
+    <Card href="/ingilizce" color="#6eb5c8" icon="📚" title="İngilizce / IELTS">
       <div className="flex items-baseline gap-2">
         <span className="text-lg font-semibold text-foreground">{daysLeft}</span>
         <span className="text-xs text-muted">gün kaldı</span>

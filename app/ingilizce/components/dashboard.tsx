@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import { 
   BookOpen, 
@@ -89,7 +89,7 @@ export function Dashboard({ onModuleChange }: DashboardProps) {
               </div>
               <div>
                 <h3 className="font-semibold text-foreground">{currentLevel.name}</h3>
-                <p className="text-sm text-muted-foreground">{(currentLevel as any).nameTr ?? (currentLevel as any).nametr ?? ''}</p>
+                <p className="text-sm text-muted-foreground">{currentLevel.nameTr}</p>
               </div>
             </div>
             {nextLevel && (

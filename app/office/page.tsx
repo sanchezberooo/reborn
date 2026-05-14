@@ -353,7 +353,7 @@ export default function OfficePage() {
             />
             {/* Hint */}
             {!selectedId && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[11px] text-white/30 pointer-events-none select-none">
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[11px] text-[#aaaaaa] pointer-events-none select-none">
                 Masaya tıkla · Kaydır: zoom · Sürükle: döndür
               </div>
             )}

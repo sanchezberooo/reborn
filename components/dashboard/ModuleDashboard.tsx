@@ -13,7 +13,7 @@ function EmptySlot({ index }: { index: number }) {
     <Link
       href="/"
       title="Sanchez'e söyle, modül eklesin"
-      className="bg-surface border border-dashed border-border rounded-2xl p-5 flex flex-col items-center justify-center gap-2 hover:border-gold/40 hover:bg-surface-2 transition-all duration-150 group min-h-[130px]"
+      className="bg-surface border border-dashed border-border rounded-lg p-5 flex flex-col items-center justify-center gap-2 hover:border-gold/40 hover:bg-surface-2 transition-all duration-150 group min-h-[130px]"
     >
       <div className="w-9 h-9 rounded-xl border border-dashed border-border group-hover:border-gold/30 flex items-center justify-center transition-colors">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted/40 group-hover:text-muted transition-colors">
