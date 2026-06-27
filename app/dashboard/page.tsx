@@ -7,7 +7,7 @@ import type { ModuleItem } from '@/lib/modules'
 
 // ─── habit helpers ────────────────────────────────────────────────────────────
 
-const HABIT_IDS = ['sleep','eat','social','water','study','exercise','read','journal','plan']
+const HABIT_IDS = ['sleep','eat','social_media','water','study','exercise','read','journal','plan']
 
 function localISO(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`

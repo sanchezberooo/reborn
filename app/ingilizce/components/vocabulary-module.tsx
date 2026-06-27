@@ -1,549 +1,543 @@
 'use client'
 
-import { useState } from 'react'
-import { 
-  Search, 
-  Volume2, 
-  BookmarkPlus, 
-  Check, 
-  X, 
-  ChevronRight,
-  Filter,
-  RotateCcw,
-  Lightbulb,
-  ArrowLeft,
-  ArrowRight
-} from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { sampleWords, wordCategories } from '../lib/data'
-import type { Word, Level } from '../lib/types'
-import { cn } from '@/lib/utils'
+import { LevelTabsLayout, RichWordList, type LevelContent, type RichWord } from './level-tabs'
 
-type ViewMode = 'list' | 'flashcard' | 'learn'
+// ─── A1 ───────────────────────────────────────────────────────────────────────
+
+const A1_GREETINGS: RichWord[] = [
+  { en: 'hello / hi', tr: 'merhaba', example: 'Hello! My name is Ali.' },
+  { en: 'goodbye / bye', tr: 'hoşça kal', example: 'Goodbye! See you tomorrow.' },
+  { en: 'good morning', tr: 'günaydın', example: 'Good morning! Did you sleep well?' },
+  { en: 'good afternoon', tr: 'iyi günler', example: 'Good afternoon, how can I help you?' },
+  { en: 'good evening', tr: 'iyi akşamlar', example: 'Good evening! Come in, please.' },
+  { en: 'good night', tr: 'iyi geceler', example: 'Good night! Sleep well.' },
+  { en: 'please', tr: 'lütfen', example: 'Can you help me, please?' },
+  { en: 'thank you / thanks', tr: 'teşekkür ederim', example: 'Thank you for your help!' },
+  { en: "you're welcome", tr: 'rica ederim', example: "You're welcome! Any time." },
+  { en: 'sorry / excuse me', tr: 'özür dilerim / pardon', example: 'Sorry, I am late.' },
+  { en: 'yes / no', tr: 'evet / hayır', example: "Yes, I understand. No, I don't agree." },
+  { en: 'how are you?', tr: 'nasılsın?', example: "How are you? — I'm fine, thanks!" },
+  { en: 'nice to meet you', tr: 'tanıştığımıza memnun oldum', example: 'Nice to meet you, Sara!' },
+  { en: 'see you later', tr: 'görüşürüz', example: 'See you later! Take care.' },
+  { en: 'take care', tr: 'kendine iyi bak', example: 'Goodbye and take care!' },
+]
+
+const A1_NUMBERS: RichWord[] = [
+  { en: 'one / two / three', tr: 'bir / iki / üç', example: 'I have two sisters.' },
+  { en: 'four / five / six', tr: 'dört / beş / altı', example: 'There are six students in the room.' },
+  { en: 'seven / eight / nine', tr: 'yedi / sekiz / dokuz', example: 'My cat is nine years old.' },
+  { en: 'ten / eleven / twelve', tr: 'on / on bir / on iki', example: "The meeting starts at ten o'clock." },
+  { en: 'twenty / thirty / forty', tr: 'yirmi / otuz / kırk', example: 'She is twenty years old.' },
+  { en: 'fifty / sixty / seventy', tr: 'elli / altmış / yetmiş', example: 'The bag costs fifty pounds.' },
+  { en: 'hundred / thousand', tr: 'yüz / bin', example: 'There are a thousand students at our school.' },
+  { en: 'first / second / third', tr: 'birinci / ikinci / üçüncü', example: 'I live on the third floor.' },
+  { en: 'half / quarter', tr: 'yarım / çeyrek', example: 'I drink half a litre of water every morning.' },
+  { en: 'many / a lot of', tr: 'çok / birçok', example: 'There are many people in the park.' },
+  { en: 'a few / some', tr: 'birkaç / biraz', example: 'I have a few questions for you.' },
+  { en: 'all / most', tr: 'hepsi / çoğu', example: 'Most students passed the exam.' },
+]
+
+const A1_COLORS: RichWord[] = [
+  { en: 'red', tr: 'kırmızı', example: 'She is wearing a red dress.' },
+  { en: 'blue', tr: 'mavi', example: 'The sky is blue today.' },
+  { en: 'green', tr: 'yeşil', example: 'The grass is green in spring.' },
+  { en: 'yellow', tr: 'sarı', example: 'Lemons are yellow.' },
+  { en: 'orange', tr: 'turuncu', example: 'I like orange juice.' },
+  { en: 'purple / violet', tr: 'mor / eflatun', example: 'She painted the wall purple.' },
+  { en: 'pink', tr: 'pembe', example: 'My sister loves pink flowers.' },
+  { en: 'black', tr: 'siyah', example: 'He always wears black shoes.' },
+  { en: 'white', tr: 'beyaz', example: 'The walls of the hospital are white.' },
+  { en: 'grey / gray', tr: 'gri', example: 'The clouds are grey.' },
+  { en: 'brown', tr: 'kahverengi', example: 'The table is made of brown wood.' },
+  { en: 'light / dark', tr: 'açık / koyu', example: 'I prefer light blue, not dark blue.' },
+]
+
+const A1_TIME: RichWord[] = [
+  { en: 'Monday / Tuesday', tr: 'Pazartesi / Salı', example: 'The class is on Monday.' },
+  { en: 'Wednesday / Thursday', tr: 'Çarşamba / Perşembe', example: 'We have a test on Wednesday.' },
+  { en: 'Friday / Saturday / Sunday', tr: 'Cuma / Cumartesi / Pazar', example: 'I relax on Sunday.' },
+  { en: 'January / February / March', tr: 'Ocak / Şubat / Mart', example: 'My birthday is in March.' },
+  { en: 'April / May / June', tr: 'Nisan / Mayıs / Haziran', example: 'Summer begins in June.' },
+  { en: 'July / August / September', tr: 'Temmuz / Ağustos / Eylül', example: 'We go on holiday in August.' },
+  { en: 'October / November / December', tr: 'Ekim / Kasım / Aralık', example: 'Christmas is in December.' },
+  { en: 'today / tomorrow / yesterday', tr: 'bugün / yarın / dün', example: 'Yesterday I was at home.' },
+  { en: 'morning / afternoon / evening', tr: 'sabah / öğleden sonra / akşam', example: 'I study in the morning.' },
+  { en: 'week / month / year', tr: 'hafta / ay / yıl', example: 'I exercise three times a week.' },
+  { en: 'now / later / soon', tr: 'şimdi / sonra / yakında', example: "I can't talk now. Call me later." },
+  { en: 'always / usually / sometimes', tr: 'her zaman / genellikle / bazen', example: 'I usually eat breakfast at 7.' },
+  { en: 'never / rarely / often', tr: 'hiçbir zaman / nadiren / sık sık', example: 'I never drink alcohol.' },
+]
+
+const A1_FAMILY: RichWord[] = [
+  { en: 'mother / mom', tr: 'anne', example: 'My mother is a teacher.' },
+  { en: 'father / dad', tr: 'baba', example: 'My father works at a hospital.' },
+  { en: 'sister', tr: 'kız kardeş', example: 'I have one sister. She is 14.' },
+  { en: 'brother', tr: 'erkek kardeş', example: 'My brother plays football every day.' },
+  { en: 'grandmother / grandma', tr: 'büyükanne / anneanne / babaanne', example: 'My grandma makes the best food.' },
+  { en: 'grandfather / grandpa', tr: 'büyükbaba / dede', example: 'My grandfather tells great stories.' },
+  { en: 'aunt', tr: 'teyze / hala', example: 'My aunt lives in Ankara.' },
+  { en: 'uncle', tr: 'amca / dayı', example: 'My uncle has a big garden.' },
+  { en: 'cousin', tr: 'kuzen', example: 'I play games with my cousins at weekends.' },
+  { en: 'baby / child / children', tr: 'bebek / çocuk / çocuklar', example: 'The children are playing in the garden.' },
+  { en: 'husband / wife', tr: 'koca / eş / hanım', example: 'Her husband is a doctor.' },
+  { en: 'family', tr: 'aile', example: 'I love spending time with my family.' },
+  { en: 'friend', tr: 'arkadaş', example: 'She is my best friend.' },
+  { en: 'neighbour', tr: 'komşu', example: 'Our neighbours are very kind.' },
+]
+
+const A1_FOOD: RichWord[] = [
+  { en: 'bread', tr: 'ekmek', example: 'I eat bread with cheese every morning.' },
+  { en: 'rice', tr: 'pirinç / pilav', example: 'She cooked rice for dinner.' },
+  { en: 'pasta / noodles', tr: 'makarna', example: 'I love pasta with tomato sauce.' },
+  { en: 'egg', tr: 'yumurta', example: 'I have two eggs for breakfast.' },
+  { en: 'chicken', tr: 'tavuk', example: 'We had grilled chicken for lunch.' },
+  { en: 'meat / beef / lamb', tr: 'et / sığır / kuzu', example: "He doesn't eat meat — he is vegetarian." },
+  { en: 'fish', tr: 'balık', example: 'We eat fish on Fridays.' },
+  { en: 'apple', tr: 'elma', example: 'An apple a day keeps the doctor away.' },
+  { en: 'banana', tr: 'muz', example: 'I always put a banana in my bag.' },
+  { en: 'tomato', tr: 'domates', example: 'I like tomatoes in my salad.' },
+  { en: 'potato', tr: 'patates', example: 'French fries are made from potatoes.' },
+  { en: 'salad', tr: 'salata', example: 'I have a salad for lunch every day.' },
+  { en: 'soup', tr: 'çorba', example: 'I love hot soup in winter.' },
+  { en: 'water', tr: 'su', example: 'Drink at least two litres of water a day.' },
+  { en: 'milk', tr: 'süt', example: 'She drinks a glass of milk every evening.' },
+  { en: 'coffee', tr: 'kahve', example: 'I need coffee in the morning.' },
+  { en: 'tea', tr: 'çay', example: 'Would you like a cup of tea?' },
+  { en: 'juice', tr: 'meyve suyu', example: 'I prefer orange juice at breakfast.' },
+  { en: 'sugar', tr: 'şeker', example: 'Do you take sugar in your coffee?' },
+  { en: 'cheese', tr: 'peynir', example: 'Turkish breakfast has many types of cheese.' },
+  { en: 'butter', tr: 'tereyağı', example: 'I spread butter on my toast.' },
+  { en: 'chocolate', tr: 'çikolata', example: 'This chocolate cake is delicious!' },
+]
+
+const A1_ANIMALS: RichWord[] = [
+  { en: 'cat', tr: 'kedi', example: 'Our cat sleeps all day.' },
+  { en: 'dog', tr: 'köpek', example: 'Dogs are loyal animals.' },
+  { en: 'bird', tr: 'kuş', example: 'A bird is singing in the tree.' },
+  { en: 'fish', tr: 'balık', example: 'I have three fish in my aquarium.' },
+  { en: 'horse', tr: 'at', example: 'She rides a horse every weekend.' },
+  { en: 'cow', tr: 'inek', example: 'Cows give us milk.' },
+  { en: 'sheep', tr: 'koyun', example: 'Sheep are on the hill.' },
+  { en: 'chicken / hen', tr: 'tavuk', example: 'Hens lay eggs every day.' },
+  { en: 'lion', tr: 'aslan', example: 'The lion is called the king of animals.' },
+  { en: 'elephant', tr: 'fil', example: 'Elephants are the largest land animals.' },
+  { en: 'monkey', tr: 'maymun', example: 'Monkeys are very clever.' },
+  { en: 'bear', tr: 'ayı', example: 'Bears sleep all winter.' },
+  { en: 'rabbit', tr: 'tavşan', example: 'Rabbits love eating carrots.' },
+  { en: 'snake', tr: 'yılan', example: 'Some snakes are poisonous.' },
+  { en: 'tiger', tr: 'kaplan', example: 'Tigers are fast and powerful.' },
+  { en: 'wolf', tr: 'kurt', example: 'Wolves live in forests.' },
+  { en: 'fox', tr: 'tilki', example: 'The fox is known for being clever.' },
+  { en: 'butterfly', tr: 'kelebek', example: 'Butterflies have beautiful wings.' },
+  { en: 'bee', tr: 'arı', example: 'Bees make honey.' },
+  { en: 'whale', tr: 'balina', example: 'Blue whales are the biggest animals on Earth.' },
+]
+
+const A1_CLOTHES: RichWord[] = [
+  { en: 'shirt / T-shirt', tr: 'gömlek / tişört', example: 'He is wearing a white shirt.' },
+  { en: 'trousers / pants', tr: 'pantolon', example: 'She bought new black trousers.' },
+  { en: 'jeans', tr: 'kot pantolon', example: 'Jeans are very popular everywhere.' },
+  { en: 'dress', tr: 'elbise', example: 'She wore a beautiful red dress.' },
+  { en: 'skirt', tr: 'etek', example: 'She bought a short skirt.' },
+  { en: 'jacket / coat', tr: 'ceket / mont', example: "Take your coat — it's cold outside." },
+  { en: 'shoes', tr: 'ayakkabı', example: 'I bought a new pair of shoes.' },
+  { en: 'boots', tr: 'çizme / bot', example: 'She wears boots in winter.' },
+  { en: 'socks', tr: 'çorap', example: 'I always wear clean socks.' },
+  { en: 'hat / cap', tr: 'şapka', example: 'He put on a cap before going out.' },
+  { en: 'scarf', tr: 'atkı / eşarp', example: 'She wears a scarf in cold weather.' },
+  { en: 'gloves', tr: 'eldiven', example: "Don't forget your gloves — it's freezing!" },
+  { en: 'sweater / jumper', tr: 'kazak', example: 'I knitted this sweater myself.' },
+  { en: 'pyjamas', tr: 'pijama', example: 'I put on my pyjamas and went to bed.' },
+  { en: 'underwear', tr: 'iç çamaşırı', example: 'He packed underwear for the trip.' },
+]
+
+const A1_HOUSE: RichWord[] = [
+  { en: 'house / home', tr: 'ev', example: 'I feel safe at home.' },
+  { en: 'flat / apartment', tr: 'daire', example: 'We live in a small flat in the city.' },
+  { en: 'kitchen', tr: 'mutfak', example: 'We cook dinner in the kitchen.' },
+  { en: 'bedroom', tr: 'yatak odası', example: 'My bedroom is on the second floor.' },
+  { en: 'bathroom', tr: 'banyo / tuvalet', example: 'There is one bathroom in our flat.' },
+  { en: 'living room', tr: 'oturma odası / salon', example: 'We watch TV in the living room.' },
+  { en: 'dining room', tr: 'yemek odası', example: 'We eat together in the dining room.' },
+  { en: 'garden / yard', tr: 'bahçe', example: 'The children play in the garden.' },
+  { en: 'table', tr: 'masa', example: 'The keys are on the table.' },
+  { en: 'chair', tr: 'sandalye', example: 'Please sit on the chair.' },
+  { en: 'sofa / couch', tr: 'kanepe', example: 'He fell asleep on the sofa.' },
+  { en: 'bed', tr: 'yatak', example: "I go to bed at 10 o'clock." },
+  { en: 'window', tr: 'pencere', example: "Open the window — it's hot." },
+  { en: 'door', tr: 'kapı', example: 'Please close the door behind you.' },
+  { en: 'floor / ceiling / wall', tr: 'zemin / tavan / duvar', example: 'The floor is cold in winter.' },
+  { en: 'lamp / light', tr: 'lamba / ışık', example: 'Turn on the light, please.' },
+  { en: 'fridge / refrigerator', tr: 'buzdolabı', example: 'The milk is in the fridge.' },
+  { en: 'wardrobe / cupboard', tr: 'dolap', example: 'My clothes are in the wardrobe.' },
+  { en: 'shelf / shelves', tr: 'raf / raflar', example: 'There are books on the shelf.' },
+  { en: 'stairs / lift / elevator', tr: 'merdiven / asansör', example: 'Take the lift to the fifth floor.' },
+]
+
+const A1_VERBS: RichWord[] = [
+  { en: 'be', tr: 'olmak', example: 'I am a student. She is happy.', irregular: 'am/is/are — was/were — been' },
+  { en: 'have', tr: 'sahip olmak', example: 'I have two cats.', irregular: 'have/has — had — had' },
+  { en: 'go', tr: 'gitmek', example: 'I go to school every day.', irregular: 'go — went — gone' },
+  { en: 'come', tr: 'gelmek', example: 'She comes home at 6 pm.', irregular: 'come — came — come' },
+  { en: 'see', tr: 'görmek', example: 'I can see the mountains from here.', irregular: 'see — saw — seen' },
+  { en: 'eat', tr: 'yemek', example: 'We eat dinner at 7 pm.', irregular: 'eat — ate — eaten' },
+  { en: 'drink', tr: 'içmek', example: 'She drinks coffee every morning.', irregular: 'drink — drank — drunk' },
+  { en: 'sleep', tr: 'uyumak', example: 'I sleep eight hours a night.', irregular: 'sleep — slept — slept' },
+  { en: 'get up', tr: 'kalkmak', example: 'I get up at 7 every morning.', irregular: 'get — got — got' },
+  { en: 'do', tr: 'yapmak', example: 'She does her homework after school.', irregular: 'do — did — done' },
+  { en: 'make', tr: 'yapmak / pişirmek', example: 'He makes breakfast every morning.', irregular: 'make — made — made' },
+  { en: 'take', tr: 'almak', example: 'Take an umbrella — it might rain.', irregular: 'take — took — taken' },
+  { en: 'give', tr: 'vermek', example: 'She gave me a gift.', irregular: 'give — gave — given' },
+  { en: 'put', tr: 'koymak', example: 'Put the book on the shelf.', irregular: 'put — put — put' },
+  { en: 'know', tr: 'bilmek', example: 'I know the answer.', irregular: 'know — knew — known' },
+  { en: 'think', tr: 'düşünmek', example: 'I think this is correct.', irregular: 'think — thought — thought' },
+  { en: 'say / tell', tr: 'demek / söylemek', example: 'She said hello. He told me the truth.', irregular: 'say — said — said' },
+  { en: 'want', tr: 'istemek', example: 'I want to learn English.' },
+  { en: 'need', tr: 'ihtiyaç duymak', example: 'I need help with my homework.' },
+  { en: 'like / love', tr: 'sevmek / çok sevmek', example: 'I like chocolate. I love my family.' },
+  { en: 'work', tr: 'çalışmak', example: 'She works at a hospital.' },
+  { en: 'study', tr: 'çalışmak / okumak', example: 'He studies English every day.' },
+  { en: 'play', tr: 'oynamak / çalmak', example: 'Children play outside. He plays guitar.' },
+  { en: 'listen', tr: 'dinlemek', example: 'Listen carefully to the teacher.' },
+  { en: 'read', tr: 'okumak', example: 'I read books every night.', irregular: 'read — read — read' },
+  { en: 'write', tr: 'yazmak', example: 'Write your name here.', irregular: 'write — wrote — written' },
+  { en: 'speak / talk', tr: 'konuşmak', example: 'She speaks three languages. They talk a lot.' },
+  { en: 'walk / run', tr: 'yürümek / koşmak', example: 'I walk to school. He runs every morning.', irregular: 'run — ran — run' },
+  { en: 'buy', tr: 'satın almak', example: 'I need to buy some milk.', irregular: 'buy — bought — bought' },
+  { en: 'find', tr: 'bulmak', example: "I can't find my keys!", irregular: 'find — found — found' },
+]
+
+const A1_BODY: RichWord[] = [
+  { en: 'head', tr: 'kafa / baş', example: 'I have a headache today.' },
+  { en: 'eye / eyes', tr: 'göz / gözler', example: 'She has beautiful blue eyes.' },
+  { en: 'ear / ears', tr: 'kulak / kulaklar', example: "I can't hear — something is wrong with my ear." },
+  { en: 'nose', tr: 'burun', example: 'My nose is running because of the cold.' },
+  { en: 'mouth / lip', tr: 'ağız / dudak', example: 'Open your mouth and say "ah".' },
+  { en: 'tooth / teeth', tr: 'diş / dişler', example: 'Brush your teeth twice a day.' },
+  { en: 'hair', tr: 'saç', example: 'She has long, dark hair.' },
+  { en: 'face', tr: 'yüz', example: 'Wash your face before bed.' },
+  { en: 'neck / shoulder', tr: 'boyun / omuz', example: 'I have pain in my neck.' },
+  { en: 'arm / elbow / wrist', tr: 'kol / dirsek / bilek', example: 'She broke her arm in a fall.' },
+  { en: 'hand / finger', tr: 'el / parmak', example: 'He hurt his finger while cooking.' },
+  { en: 'chest / back', tr: 'göğüs / sırt', example: 'My back hurts from sitting all day.' },
+  { en: 'stomach / belly', tr: 'mide / karın', example: 'I have a stomach ache.' },
+  { en: 'leg / knee', tr: 'bacak / diz', example: 'He injured his knee playing football.' },
+  { en: 'foot / feet / toe', tr: 'ayak / ayaklar / ayak parmağı', example: 'My feet hurt after walking all day.' },
+  { en: 'heart', tr: 'kalp', example: 'Exercise is good for your heart.' },
+]
+
+const A1_ADJECTIVES: RichWord[] = [
+  { en: 'big / large', tr: 'büyük', example: 'Istanbul is a very big city.' },
+  { en: 'small / little', tr: 'küçük', example: 'My flat is small but cosy.' },
+  { en: 'tall / short (height)', tr: 'uzun / kısa (boy)', example: 'He is very tall — almost two metres.' },
+  { en: 'long / short (length)', tr: 'uzun / kısa (uzunluk)', example: 'She has long brown hair.' },
+  { en: 'old / new', tr: 'eski / yeni', example: 'I need a new phone — mine is very old.' },
+  { en: 'young', tr: 'genç', example: 'She looks very young for her age.' },
+  { en: 'hot / warm', tr: 'sıcak / ılık', example: "The tea is too hot to drink." },
+  { en: 'cold / cool', tr: 'soğuk / serin', example: "It's cold outside — wear a coat!" },
+  { en: 'good / great', tr: 'iyi / harika', example: "That's a great idea!" },
+  { en: 'bad / terrible', tr: 'kötü / berbat', example: 'The weather today is terrible.' },
+  { en: 'easy / difficult', tr: 'kolay / zor', example: 'The exam was more difficult than I expected.' },
+  { en: 'fast / slow', tr: 'hızlı / yavaş', example: 'This car is very fast.' },
+  { en: 'happy / sad', tr: 'mutlu / üzgün', example: 'I am happy to see you!' },
+  { en: 'beautiful / ugly', tr: 'güzel / çirkin', example: 'The view from the mountain is beautiful.' },
+  { en: 'clean / dirty', tr: 'temiz / kirli', example: 'Please keep your room clean.' },
+  { en: 'full / empty', tr: 'dolu / boş', example: 'My glass is empty — can I have more water?' },
+  { en: 'open / closed', tr: 'açık / kapalı', example: 'The shop is closed on Sundays.' },
+  { en: 'right / wrong', tr: 'doğru / yanlış', example: 'Your answer is wrong. The right answer is 42.' },
+  { en: 'tired / hungry / thirsty', tr: 'yorgun / aç / susuz', example: "I'm tired after work." },
+  { en: 'interesting / boring', tr: 'ilginç / sıkıcı', example: 'This book is very interesting.' },
+]
+
+// ─── A2 ───────────────────────────────────────────────────────────────────────
+
+const A2_WEATHER: RichWord[] = [
+  { en: 'sunny', tr: 'güneşli', example: "It's a sunny day — let's go to the park!" },
+  { en: 'cloudy / overcast', tr: 'bulutlu', example: 'The sky is cloudy; it might rain.' },
+  { en: 'rainy / raining', tr: 'yağmurlu', example: "It's raining heavily outside." },
+  { en: 'snowy / snowing', tr: 'karlı / kar yağıyor', example: 'It was snowing all night.' },
+  { en: 'windy', tr: 'rüzgarlı', example: "It's very windy — hold your hat!" },
+  { en: 'foggy', tr: 'sisli', example: 'Be careful driving in foggy weather.' },
+  { en: 'icy / freezing', tr: 'buzlu / dondurucu', example: 'The roads are icy this morning.' },
+  { en: 'humid / muggy', tr: 'nemli / bunaltıcı', example: 'August is hot and humid in Istanbul.' },
+  { en: 'storm / thunder / lightning', tr: 'fırtına / gök gürültüsü / şimşek', example: 'There was a terrible storm last night.' },
+  { en: 'temperature / degree', tr: 'sıcaklık / derece', example: 'The temperature today is 28 degrees.' },
+  { en: 'forecast / weather report', tr: 'hava tahmini', example: 'The forecast says it will rain tomorrow.' },
+  { en: 'season — spring, summer, autumn, winter', tr: 'mevsim — ilkbahar, yaz, sonbahar, kış', example: 'Autumn is my favourite season.' },
+  { en: 'flood', tr: 'sel', example: 'Heavy rain caused flooding in the city.' },
+  { en: 'drought', tr: 'kuraklık', example: 'The drought destroyed the harvest.' },
+  { en: 'rainbow', tr: 'gökkuşağı', example: 'After the rain, we saw a rainbow.' },
+]
+
+const A2_JOBS: RichWord[] = [
+  { en: 'doctor', tr: 'doktor', example: 'She is a doctor at the city hospital.' },
+  { en: 'nurse', tr: 'hemşire', example: 'The nurse checked my blood pressure.' },
+  { en: 'teacher / professor', tr: 'öğretmen / profesör', example: 'He has been a teacher for 20 years.' },
+  { en: 'engineer', tr: 'mühendis', example: 'She works as a civil engineer.' },
+  { en: 'lawyer', tr: 'avukat', example: 'My uncle is a lawyer in Ankara.' },
+  { en: 'architect', tr: 'mimar', example: 'The architect designed a beautiful building.' },
+  { en: 'journalist / reporter', tr: 'gazeteci / muhabir', example: 'The journalist wrote about the event.' },
+  { en: 'chef / cook', tr: 'aşçı', example: 'The chef cooked an amazing meal.' },
+  { en: 'waiter / waitress', tr: 'garson', example: 'The waiter brought our food quickly.' },
+  { en: 'pilot', tr: 'pilot', example: 'She wants to become a pilot.' },
+  { en: 'mechanic', tr: 'tamirci / mekanik', example: 'The mechanic fixed my car.' },
+  { en: 'programmer / developer', tr: 'yazılımcı / geliştirici', example: 'He works as a software developer.' },
+  { en: 'accountant', tr: 'muhasebeci', example: 'Our accountant handles all the finances.' },
+  { en: 'artist / designer', tr: 'sanatçı / tasarımcı', example: 'She works as a graphic designer.' },
+  { en: 'police officer', tr: 'polis memuru', example: 'The police officer helped us find the address.' },
+  { en: 'firefighter', tr: 'itfaiyeci', example: 'Firefighters are very brave.' },
+  { en: 'scientist / researcher', tr: 'bilim insanı / araştırmacı', example: 'The scientist published a new study.' },
+  { en: 'musician / singer', tr: 'müzisyen / şarkıcı', example: 'She plays in a band as a musician.' },
+  { en: 'farmer', tr: 'çiftçi', example: 'Farmers wake up very early every day.' },
+  { en: 'dentist', tr: 'diş hekimi', example: 'I need to go to the dentist this week.' },
+]
+
+const A2_TRANSPORT: RichWord[] = [
+  { en: 'bus', tr: 'otobüs', example: 'I take the bus to work every day.' },
+  { en: 'train', tr: 'tren', example: 'The train from Istanbul to Ankara takes 4 hours.' },
+  { en: 'underground / metro / subway', tr: 'metro', example: 'The metro is the fastest way to travel in the city.' },
+  { en: 'tram', tr: 'tramvay', example: 'There is a tram that goes to the city centre.' },
+  { en: 'taxi / cab', tr: 'taksi', example: 'We took a taxi to the airport.' },
+  { en: 'car / vehicle', tr: 'araba / araç', example: 'She drives her car to work.' },
+  { en: 'bicycle / bike', tr: 'bisiklet', example: 'Riding a bicycle is good for health.' },
+  { en: 'motorbike / scooter', tr: 'motosiklet / scooter', example: 'He rides a scooter to save money on petrol.' },
+  { en: 'aeroplane / flight', tr: 'uçak / uçuş', example: 'The flight to London takes three hours.' },
+  { en: 'ferry / boat / ship', tr: 'feribot / tekne / gemi', example: 'We crossed the Bosphorus by ferry.' },
+  { en: 'station / stop / airport', tr: 'istasyon / durak / havalimanı', example: 'Meet me at the bus stop.' },
+  { en: 'ticket / platform', tr: 'bilet / peron', example: 'Buy your ticket before getting on the train.' },
+  { en: 'traffic jam / rush hour', tr: 'trafik sıkışıklığı / yoğun saat', example: 'There is always a traffic jam during rush hour.' },
+  { en: 'motorway / highway', tr: 'otoyol', example: 'The motorway takes you to the airport quickly.' },
+  { en: 'petrol / fuel', tr: 'benzin / yakıt', example: 'I need to fill up with petrol.' },
+]
+
+const A2_SHOPPING: RichWord[] = [
+  { en: 'shop / store / market', tr: 'dükkan / mağaza / market', example: 'There is a big store near our house.' },
+  { en: 'supermarket', tr: 'süpermarket', example: 'I do my shopping at the supermarket.' },
+  { en: 'price / cost', tr: 'fiyat / maliyet', example: 'What is the price of this jacket?' },
+  { en: 'discount / sale', tr: 'indirim', example: 'Everything is 30% off in the sale!' },
+  { en: 'expensive / cheap', tr: 'pahalı / ucuz', example: 'This bag is too expensive for me.' },
+  { en: 'receipt', tr: 'fiş / makbuz', example: 'Keep your receipt in case you want a refund.' },
+  { en: 'refund / exchange', tr: 'iade / değişim', example: 'I got a refund for the broken product.' },
+  { en: 'cashier / checkout', tr: 'kasiyer / kasa', example: 'Pay at the checkout, please.' },
+  { en: 'queue / wait in line', tr: 'kuyruk / sıraya girmek', example: 'There was a long queue at the checkout.' },
+  { en: 'credit card / cash', tr: 'kredi kartı / nakit', example: 'Do you accept credit cards here?' },
+  { en: 'shopping bag / trolley / basket', tr: 'alışveriş çantası / alışveriş arabası', example: 'I need a trolley for all this shopping.' },
+  { en: 'fitting room / try on', tr: 'soyunma odası / denemek', example: 'Can I try this dress on, please?' },
+  { en: 'size / medium / large', tr: 'beden / orta / büyük', example: 'Do you have this in a larger size?' },
+]
+
+const A2_FEELINGS: RichWord[] = [
+  { en: 'happy / excited', tr: 'mutlu / heyecanlı', example: "I'm so excited about the trip!" },
+  { en: 'sad / upset', tr: 'üzgün / mutsuz', example: 'She was upset when she heard the news.' },
+  { en: 'angry / furious', tr: 'sinirli / öfkeli', example: 'He was furious about the mistake.' },
+  { en: 'scared / frightened', tr: 'korkan / korkmuş', example: "I'm scared of spiders." },
+  { en: 'worried / anxious', tr: 'endişeli / kaygılı', example: 'She was worried about the exam results.' },
+  { en: 'surprised / shocked', tr: 'şaşırmış / şoke', example: 'I was shocked by the news.' },
+  { en: 'bored', tr: 'sıkılmış', example: "I'm so bored — there's nothing to do." },
+  { en: 'confused', tr: 'kafası karışık', example: "I'm confused by this exercise." },
+  { en: 'embarrassed', tr: 'utanmış', example: 'I was embarrassed when I forgot his name.' },
+  { en: 'proud', tr: 'gururlu', example: "She was proud of her son's success." },
+  { en: 'grateful / thankful', tr: 'minnettar / şükran duyan', example: "I'm very grateful for your help." },
+  { en: 'lonely / alone', tr: 'yalnız / tek başına', example: 'He felt lonely after moving to a new city.' },
+  { en: 'calm / relaxed', tr: 'sakin / rahat', example: 'After the holiday, I feel calm and relaxed.' },
+  { en: 'confident', tr: 'kendinden emin', example: 'She is confident in her abilities.' },
+  { en: 'jealous / envious', tr: 'kıskanç', example: "He felt jealous of his brother's success." },
+  { en: 'relieved', tr: 'rahatlamış', example: 'I was relieved when I passed the exam.' },
+]
+
+const A2_TECHNOLOGY: RichWord[] = [
+  { en: 'smartphone / mobile phone', tr: 'akıllı telefon', example: 'I use my smartphone for everything.' },
+  { en: 'laptop / computer', tr: 'dizüstü bilgisayar / bilgisayar', example: 'I need a new laptop for university.' },
+  { en: 'screen / display', tr: 'ekran', example: 'The screen on my phone cracked.' },
+  { en: 'battery / charger', tr: 'pil / şarj aleti', example: "My battery is dead — where's my charger?" },
+  { en: 'app / application', tr: 'uygulama', example: 'I downloaded a new app for learning English.' },
+  { en: 'internet / Wi-Fi', tr: 'internet / kablosuz bağlantı', example: 'Is there Wi-Fi here?' },
+  { en: 'password', tr: 'şifre / parola', example: "Don't share your password with anyone." },
+  { en: 'download / upload', tr: 'indirmek / yüklemek', example: 'I need to download the document.' },
+  { en: 'social media', tr: 'sosyal medya', example: 'She spends hours on social media every day.' },
+  { en: 'message / email', tr: 'mesaj / e-posta', example: 'Send me an email with the details.' },
+  { en: 'search engine / browser', tr: 'arama motoru / tarayıcı', example: 'I use a search engine to find information.' },
+  { en: 'camera / photo / video', tr: 'kamera / fotoğraf / video', example: 'She took a photo of the sunset.' },
+  { en: 'headphones / speaker', tr: 'kulaklık / hoparlör', example: 'I use headphones on the train.' },
+  { en: 'keyboard / mouse', tr: 'klavye / fare', example: 'The keyboard is not working properly.' },
+]
+
+const A2_PLACES: RichWord[] = [
+  { en: 'city / town / village', tr: 'şehir / kasaba / köy', example: 'I grew up in a small village.' },
+  { en: 'centre / downtown', tr: 'merkez', example: 'The hotel is in the city centre.' },
+  { en: 'hospital', tr: 'hastane', example: 'She works at the main hospital.' },
+  { en: 'pharmacy / chemist', tr: 'eczane', example: 'Buy the medicine from the pharmacy.' },
+  { en: 'post office', tr: 'postane', example: 'I need to go to the post office to send a parcel.' },
+  { en: 'library', tr: 'kütüphane', example: 'I borrowed three books from the library.' },
+  { en: 'museum / gallery', tr: 'müze / galeri', example: 'We visited a modern art museum.' },
+  { en: 'park / garden / square', tr: 'park / bahçe / meydan', example: 'The children play in the park.' },
+  { en: 'stadium / sports centre', tr: 'stadyum / spor merkezi', example: 'The match was at the stadium.' },
+  { en: 'restaurant / café', tr: 'restoran / kafe', example: "Let's meet at the café tomorrow." },
+  { en: 'bank', tr: 'banka', example: 'I need to go to the bank to withdraw money.' },
+  { en: 'school / university / college', tr: 'okul / üniversite / kolej', example: 'He is studying at a university in Ankara.' },
+  { en: 'church / mosque / temple', tr: 'kilise / cami / tapınak', example: 'There is a beautiful mosque in the city centre.' },
+  { en: 'cinema / theatre', tr: 'sinema / tiyatro', example: 'We went to the cinema to see the new film.' },
+  { en: 'bridge / harbour / coast', tr: 'köprü / liman / kıyı', example: 'The bridge connects the two parts of the city.' },
+]
+
+// ─── B1 ───────────────────────────────────────────────────────────────────────
+
+const B1_ACADEMIC: RichWord[] = [
+  { en: 'analyse / analysis', tr: 'analiz etmek / analiz', example: 'The report analyses the causes of climate change.' },
+  { en: 'evaluate / evaluation', tr: 'değerlendirmek / değerlendirme', example: 'The committee will evaluate all the proposals.' },
+  { en: 'hypothesis', tr: 'hipotez / varsayım', example: 'The scientist formed a hypothesis before the experiment.' },
+  { en: 'evidence / proof', tr: 'kanıt / ispat', example: 'There is clear evidence that exercise improves mood.' },
+  { en: 'conclude / conclusion', tr: 'sonuç çıkarmak / sonuç', example: 'In conclusion, more research is needed.' },
+  { en: 'methodology', tr: 'metodoloji / yöntem', example: 'The study uses a mixed methodology.' },
+  { en: 'statistics / data', tr: 'istatistik / veri', example: 'The statistics show a rise in unemployment.' },
+  { en: 'theory', tr: 'teori / kuram', example: "Darwin's theory changed our understanding of life." },
+  { en: 'significant', tr: 'önemli / anlamlı', example: 'There is a significant difference between the two groups.' },
+  { en: 'argue / argument', tr: 'tartışmak / argüman', example: 'The author argues that technology harms society.' },
+  { en: 'justify / justification', tr: 'gerekçelendirmek / gerekçe', example: 'Can you justify your decision?' },
+  { en: 'contrast / compare', tr: 'karşıtlık / karşılaştırmak', example: 'The essay contrasts two different approaches.' },
+  { en: 'approach / perspective', tr: 'yaklaşım / bakış açısı', example: 'From a scientific perspective, this is not possible.' },
+  { en: 'factor / aspect', tr: 'etken / boyut', example: 'Diet is an important factor in good health.' },
+  { en: 'impact / effect / consequence', tr: 'etki / sonuç', example: 'Social media has a huge impact on young people.' },
+  { en: 'relevant / appropriate', tr: 'ilgili / uygun', example: 'Please give relevant examples in your essay.' },
+  { en: 'define / definition', tr: 'tanımlamak / tanım', example: 'Define the key terms before you start writing.' },
+  { en: 'source / reference', tr: 'kaynak / referans', example: 'You must cite your sources in academic writing.' },
+  { en: 'accurate / precise', tr: 'doğru / kesin', example: 'Make sure your data is accurate.' },
+  { en: 'complex / complicated', tr: 'karmaşık', example: 'The issue is more complex than it first appears.' },
+]
+
+const B1_BUSINESS: RichWord[] = [
+  { en: 'negotiate / negotiation', tr: 'müzakere etmek / müzakere', example: 'The two companies negotiated a new deal.' },
+  { en: 'deadline', tr: 'son teslim tarihi', example: 'The deadline for the project is Friday.' },
+  { en: 'revenue / profit / loss', tr: 'gelir / kar / zarar', example: "The company's revenue increased by 20% last year." },
+  { en: 'budget', tr: 'bütçe', example: 'We need to stay within the budget.' },
+  { en: 'stakeholder', tr: 'paydaş / ilgili taraf', example: 'All stakeholders were informed about the decision.' },
+  { en: 'strategy / plan', tr: 'strateji / plan', example: 'We need a clear strategy to achieve our goals.' },
+  { en: 'meeting / conference', tr: 'toplantı / konferans', example: 'The quarterly meeting is tomorrow morning.' },
+  { en: 'presentation / pitch', tr: 'sunum / satış konuşması', example: 'She gave an excellent presentation to the investors.' },
+  { en: 'contract / agreement', tr: 'sözleşme / anlaşma', example: 'Read the contract carefully before signing.' },
+  { en: 'colleague / team / department', tr: 'meslektaş / ekip / departman', example: 'I get on well with my colleagues.' },
+  { en: 'promotion / raise', tr: 'terfi / zam', example: 'She got a promotion after three years.' },
+  { en: 'resign / retire', tr: 'istifa etmek / emekli olmak', example: 'He retired after 30 years with the company.' },
+  { en: 'hire / recruit / fire', tr: 'işe almak / işten çıkarmak', example: 'The company hired 50 new employees this year.' },
+  { en: 'target / goal / objective', tr: 'hedef', example: 'Our target is to increase sales by 15%.' },
+  { en: 'client / customer', tr: 'müşteri', example: 'We need to keep our clients happy.' },
+  { en: 'invoice / bill', tr: 'fatura', example: 'Please send the invoice by the end of the week.' },
+  { en: 'supply / demand', tr: 'arz / talep', example: 'When supply falls, prices usually rise.' },
+  { en: 'investment / return', tr: 'yatırım / getiri', example: 'The investment paid off within two years.' },
+]
+
+const B1_PHRASAL: RichWord[] = [
+  { en: 'give up', tr: 'vazgeçmek', example: "Don't give up — you can do it!" },
+  { en: 'carry on / keep on', tr: 'devam etmek', example: 'Carry on with the exercise.' },
+  { en: 'look into', tr: 'araştırmak', example: 'The manager looked into the complaint.' },
+  { en: 'put off', tr: 'ertelemek', example: "Don't put off until tomorrow what you can do today." },
+  { en: 'come across', tr: 'rastlamak / bulmak', example: 'I came across an interesting article online.' },
+  { en: 'set up', tr: 'kurmak', example: 'She set up her own company at 25.' },
+  { en: 'bring about', tr: 'neden olmak / yol açmak', example: 'Technology has brought about huge changes.' },
+  { en: 'turn out', tr: 'sonuçlanmak / ortaya çıkmak', example: 'The plan turned out to be a great success.' },
+  { en: 'get over', tr: 'atlatmak / üstesinden gelmek', example: 'It took me a long time to get over the illness.' },
+  { en: 'look forward to', tr: 'dört gözle beklemek', example: "I'm looking forward to the holiday." },
+  { en: 'take up', tr: 'başlamak (bir aktiviteye)', example: 'She took up yoga to reduce stress.' },
+  { en: 'work out', tr: 'egzersiz yapmak / çözmek', example: 'We need to work out the details.' },
+  { en: 'run out of', tr: 'tükenmek / bitmek', example: "We've run out of milk." },
+  { en: 'deal with', tr: 'başa çıkmak / çözmek', example: 'How do you deal with stress?' },
+  { en: 'end up', tr: 'sonunda olmak', example: 'We ended up staying at a different hotel.' },
+  { en: 'go through', tr: 'yaşamak / geçirmek', example: 'She went through a very difficult time.' },
+  { en: 'bring up', tr: 'büyütmek / gündeme getirmek', example: 'He was brought up by his grandmother.' },
+  { en: 'point out', tr: 'belirtmek / dikkat çekmek', example: 'She pointed out an error in my report.' },
+  { en: 'make up', tr: 'uydurmak / barışmak', example: 'He made up an excuse for being late.' },
+  { en: 'take off', tr: 'havalanmak / çıkarmak', example: 'The plane took off two hours late.' },
+]
+
+const B1_COLLOCATIONS: RichWord[] = [
+  { en: 'make a decision', tr: 'karar vermek', example: "It's time to make a decision." },
+  { en: 'take responsibility', tr: 'sorumluluk üstlenmek', example: 'You need to take responsibility for your actions.' },
+  { en: 'have an opportunity', tr: 'fırsatı olmak', example: 'I had an opportunity to study abroad.' },
+  { en: 'run a business', tr: 'işletmek / şirket yönetmek', example: 'Running a business is very challenging.' },
+  { en: 'make progress', tr: 'ilerleme kaydetmek', example: 'You are making great progress in English!' },
+  { en: 'pay attention', tr: 'dikkat etmek', example: 'Please pay attention during the lesson.' },
+  { en: 'do damage', tr: 'zarar vermek', example: 'Pollution does serious damage to the environment.' },
+  { en: 'raise awareness', tr: 'farkındalık yaratmak', example: 'The campaign raised awareness about mental health.' },
+  { en: 'achieve a goal', tr: 'hedefe ulaşmak', example: 'Hard work helps you achieve your goals.' },
+  { en: 'face a challenge', tr: 'zorlukla yüzleşmek', example: 'Many businesses face challenges today.' },
+  { en: 'meet a deadline', tr: 'son tarihe yetişmek', example: 'We worked overtime to meet the deadline.' },
+  { en: 'conduct research', tr: 'araştırma yapmak', example: 'Scientists conducted research on the new drug.' },
+  { en: 'have an impact', tr: 'etkisi olmak', example: 'Exercise has a positive impact on health.' },
+  { en: 'solve a problem', tr: 'sorun çözmek', example: 'We need to solve this problem quickly.' },
+  { en: 'gain experience', tr: 'deneyim kazanmak', example: 'She gained valuable experience during her internship.' },
+  { en: 'take advantage of', tr: 'fırsatı değerlendirmek', example: 'Take advantage of every learning opportunity.' },
+  { en: 'put effort into', tr: 'çaba harcamak', example: 'He put a lot of effort into the project.' },
+  { en: 'reach an agreement', tr: 'anlaşmaya varmak', example: 'The two sides finally reached an agreement.' },
+]
+
+const B1_ADVANCED: RichWord[] = [
+  { en: 'ambitious', tr: 'hırslı / hevesli', example: 'She is very ambitious — she wants to be a CEO.' },
+  { en: 'controversial', tr: 'tartışmalı', example: 'The new law is very controversial.' },
+  { en: 'inevitable', tr: 'kaçınılmaz', example: 'Change is inevitable in the modern world.' },
+  { en: 'sustainable', tr: 'sürdürülebilir', example: 'We need sustainable energy solutions.' },
+  { en: 'transparent', tr: 'şeffaf', example: 'The government must be transparent about its decisions.' },
+  { en: 'flexible', tr: 'esnek', example: 'The job requires flexible working hours.' },
+  { en: 'efficient / effective', tr: 'verimli / etkili', example: 'We need a more efficient system.' },
+  { en: 'diverse / variety', tr: 'çeşitli / çeşitlilik', example: 'The school has a diverse range of students.' },
+  { en: 'vulnerable', tr: 'savunmasız / kırılgan', example: 'Children are vulnerable to online dangers.' },
+  { en: 'fundamental', tr: 'temel / esasa ilişkin', example: 'Education is a fundamental right.' },
+  { en: 'potential', tr: 'potansiyel / olası', example: 'This student has great potential.' },
+  { en: 'consequence', tr: 'sonuç / yansıma', example: 'There are serious consequences for breaking the rules.' },
+  { en: 'circumstance', tr: 'koşul / durum', example: 'Under normal circumstances, this would not happen.' },
+  { en: 'establish', tr: 'kurmak / oluşturmak', example: 'The company was established in 1995.' },
+  { en: 'maintain', tr: 'sürdürmek / korumak', example: "It's important to maintain a healthy lifestyle." },
+  { en: 'benefit / advantage', tr: 'fayda / avantaj', example: 'Regular exercise has many benefits.' },
+  { en: 'demonstrate', tr: 'göstermek / kanıtlamak', example: 'The results demonstrate the effectiveness of the treatment.' },
+  { en: 'involve', tr: 'içermek / dahil etmek', example: 'The project involves many different departments.' },
+  { en: 'contribute', tr: 'katkıda bulunmak', example: 'Everyone should contribute to society.' },
+  { en: 'anticipate', tr: 'öngörmek / beklemek', example: 'We did not anticipate so many problems.' },
+]
+
+// ─── content map ──────────────────────────────────────────────────────────────
+
+const CONTENT: LevelContent = {
+  A1: [
+    { id: 'greetings', title: 'Selamlaşma & Temel İfadeler — Greetings', body: <RichWordList words={A1_GREETINGS} /> },
+    { id: 'numbers', title: 'Sayılar & Miktar — Numbers & Quantity', body: <RichWordList words={A1_NUMBERS} /> },
+    { id: 'colors', title: 'Renkler — Colors', body: <RichWordList words={A1_COLORS} /> },
+    { id: 'time', title: 'Günler, Aylar & Zaman — Days, Months & Time', body: <RichWordList words={A1_TIME} /> },
+    { id: 'family', title: 'Aile & İnsanlar — Family & People', body: <RichWordList words={A1_FAMILY} /> },
+    { id: 'food', title: 'Yiyecek & İçecek — Food & Drinks', body: <RichWordList words={A1_FOOD} /> },
+    { id: 'animals', title: 'Hayvanlar — Animals', body: <RichWordList words={A1_ANIMALS} /> },
+    { id: 'clothes', title: 'Kıyafetler — Clothes', body: <RichWordList words={A1_CLOTHES} /> },
+    { id: 'house', title: 'Ev & Mobilya — House & Furniture', body: <RichWordList words={A1_HOUSE} /> },
+    { id: 'verbs', title: 'Temel Fiiller (Düzensiz Formlarıyla) — Basic Verbs', body: <RichWordList words={A1_VERBS} /> },
+    { id: 'body', title: 'Vücut Organları — Body Parts', body: <RichWordList words={A1_BODY} /> },
+    { id: 'adjectives', title: 'Temel Sıfatlar — Basic Adjectives', body: <RichWordList words={A1_ADJECTIVES} /> },
+  ],
+  A2: [
+    { id: 'weather', title: 'Hava Durumu — Weather', body: <RichWordList words={A2_WEATHER} /> },
+    { id: 'jobs', title: 'Meslekler — Jobs & Professions', body: <RichWordList words={A2_JOBS} /> },
+    { id: 'transport', title: 'Ulaşım — Transport', body: <RichWordList words={A2_TRANSPORT} /> },
+    { id: 'shopping', title: 'Alışveriş — Shopping', body: <RichWordList words={A2_SHOPPING} /> },
+    { id: 'feelings', title: 'Duygular — Feelings & Emotions', body: <RichWordList words={A2_FEELINGS} /> },
+    { id: 'technology', title: 'Teknoloji — Technology', body: <RichWordList words={A2_TECHNOLOGY} /> },
+    { id: 'places', title: 'Şehir & Yerler — Places in Town', body: <RichWordList words={A2_PLACES} /> },
+  ],
+  B1: [
+    { id: 'academic', title: 'Akademik Kelimeler — Academic Vocabulary', body: <RichWordList words={B1_ACADEMIC} /> },
+    { id: 'business', title: 'İş İngilizcesi — Business English', body: <RichWordList words={B1_BUSINESS} /> },
+    { id: 'phrasal', title: 'Fiil Grupları — Phrasal Verbs', body: <RichWordList words={B1_PHRASAL} /> },
+    { id: 'collocations', title: 'Kelime Grupları — Collocations', body: <RichWordList words={B1_COLLOCATIONS} /> },
+    { id: 'advanced', title: 'İleri Seviye Kelimeler — Advanced Vocabulary', body: <RichWordList words={B1_ADVANCED} /> },
+  ],
+}
 
 export function VocabularyModule() {
-  const [viewMode, setViewMode] = useState<ViewMode>('list')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [selectedLevel, setSelectedLevel] = useState<Level | 'all'>('all')
-  const [selectedCategory, setSelectedCategory] = useState<string>('all')
-  const [currentCardIndex, setCurrentCardIndex] = useState(0)
-  const [isFlipped, setIsFlipped] = useState(false)
-  const [learnedWords, setLearnedWords] = useState<Set<string>>(new Set())
-
-  const filteredWords = sampleWords.filter(word => {
-    const matchesSearch = word.english.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          word.turkish.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesLevel = selectedLevel === 'all' || word.level === selectedLevel
-    const matchesCategory = selectedCategory === 'all' || word.category === selectedCategory
-    return matchesSearch && matchesLevel && matchesCategory
-  })
-
-  const handleNextCard = () => {
-    setIsFlipped(false)
-    setCurrentCardIndex((prev) => (prev + 1) % filteredWords.length)
-  }
-
-  const handlePrevCard = () => {
-    setIsFlipped(false)
-    setCurrentCardIndex((prev) => (prev - 1 + filteredWords.length) % filteredWords.length)
-  }
-
-  const handleMarkLearned = (wordId: string) => {
-    setLearnedWords(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(wordId)) {
-        newSet.delete(wordId)
-      } else {
-        newSet.add(wordId)
-      }
-      return newSet
-    })
-  }
-
-  const speakWord = (text: string) => {
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.lang = 'en-US'
-    utterance.rate = 0.9
-    speechSynthesis.speak(utterance)
-  }
-
-  const levelColors: Record<Level, string> = {
-    'A1': 'bg-green-500/20 text-green-400 border-green-500/30',
-    'A2': 'bg-lime-500/20 text-lime-400 border-lime-500/30',
-    'B1': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-    'B2': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-    'C1': 'bg-red-500/20 text-red-400 border-red-500/30',
-    'C2': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  }
-
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Kelime Bankasi</h1>
-          <p className="text-muted-foreground">Kelime dagarcigini gelistir</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-sm">
-            {filteredWords.length} kelime
-          </Badge>
-          <Badge variant="outline" className="text-sm bg-green-500/20 text-green-400">
-            {learnedWords.size} ogrenildi
-          </Badge>
-        </div>
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ color: '#ffffff', fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Kelime Bankası</h2>
+        <p style={{ color: '#a0a0a0', fontSize: 13 }}>
+          Her kelime için Türkçe anlamı, örnek cümle ve düzensiz fiil formu.
+        </p>
       </div>
-
-      {/* View Mode Tabs */}
-      <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
-          <TabsTrigger value="list">Liste</TabsTrigger>
-          <TabsTrigger value="flashcard">Flashcard</TabsTrigger>
-          <TabsTrigger value="learn">Ogren</TabsTrigger>
-        </TabsList>
-
-        {/* Filters */}
-        <div className="mt-4 flex flex-col gap-4 md:flex-row md:items-center">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Kelime ara..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-          <Select value={selectedLevel} onValueChange={(v) => setSelectedLevel(v as Level | 'all')}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Seviye" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tum Seviyeler</SelectItem>
-              <SelectItem value="A1">A1 - Baslangic</SelectItem>
-              <SelectItem value="A2">A2 - Temel</SelectItem>
-              <SelectItem value="B1">B1 - Orta</SelectItem>
-              <SelectItem value="B2">B2 - Orta Üstü</SelectItem>
-              <SelectItem value="C1">C1 - Ileri</SelectItem>
-              <SelectItem value="C2">C2 - Uzman</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Kategori" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tum Kategoriler</SelectItem>
-              {wordCategories.map(cat => (
-                <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* List View */}
-        <TabsContent value="list" className="mt-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredWords.map((word) => (
-              <WordCard 
-                key={word.id} 
-                word={word} 
-                isLearned={learnedWords.has(word.id)}
-                onMarkLearned={() => handleMarkLearned(word.id)}
-                onSpeak={() => speakWord(word.english)}
-                levelColor={levelColors[word.level]}
-              />
-            ))}
-          </div>
-        </TabsContent>
-
-        {/* Flashcard View */}
-        <TabsContent value="flashcard" className="mt-6">
-          {filteredWords.length > 0 ? (
-            <div className="flex flex-col items-center">
-              <div className="mb-4 text-sm text-muted-foreground">
-                {currentCardIndex + 1} / {filteredWords.length}
-              </div>
-              
-              <div 
-                className="relative w-full max-w-lg h-80 cursor-pointer perspective-1000"
-                onClick={() => setIsFlipped(!isFlipped)}
-              >
-                <div className={cn(
-                  "absolute inset-0 transition-transform duration-500 transform-style-preserve-3d",
-                  isFlipped && "rotate-y-180"
-                )}>
-                  {/* Front */}
-                  <Card className="absolute inset-0 flex flex-col items-center justify-center backface-hidden bg-gradient-to-br from-primary/10 to-accent/10">
-                    <CardContent className="text-center">
-                      <Badge className={cn("mb-4", levelColors[filteredWords[currentCardIndex].level])}>
-                        {filteredWords[currentCardIndex].level}
-                      </Badge>
-                      <h2 className="text-4xl font-bold mb-2">{filteredWords[currentCardIndex].english}</h2>
-                      <p className="text-lg text-muted-foreground">{filteredWords[currentCardIndex].pronunciation}</p>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="mt-4"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          speakWord(filteredWords[currentCardIndex].english)
-                        }}
-                      >
-                        <Volume2 className="h-5 w-5 mr-2" />
-                        Dinle
-                      </Button>
-                      <p className="mt-6 text-sm text-muted-foreground">Cevirmek icin tikla</p>
-                    </CardContent>
-                  </Card>
-                  
-                  {/* Back */}
-                  <Card className="absolute inset-0 flex flex-col items-center justify-center rotate-y-180 backface-hidden bg-gradient-to-br from-accent/10 to-primary/10">
-                    <CardContent className="text-center">
-                      <Badge className="mb-4" variant="outline">
-                        {filteredWords[currentCardIndex].partOfSpeech}
-                      </Badge>
-                      <h2 className="text-3xl font-bold mb-4">{filteredWords[currentCardIndex].turkish}</h2>
-                      <div className="text-left max-w-sm">
-                        <p className="text-sm font-medium mb-2">Ornekler:</p>
-                        <ul className="space-y-1">
-                          {filteredWords[currentCardIndex].examples.slice(0, 2).map((ex, i) => (
-                            <li key={i} className="text-sm text-muted-foreground">• {ex}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 mt-6">
-                <Button variant="outline" size="icon" onClick={handlePrevCard}>
-                  <ArrowLeft className="h-5 w-5" />
-                </Button>
-                <Button 
-                  variant={learnedWords.has(filteredWords[currentCardIndex].id) ? "default" : "outline"}
-                  onClick={() => handleMarkLearned(filteredWords[currentCardIndex].id)}
-                >
-                  {learnedWords.has(filteredWords[currentCardIndex].id) ? (
-                    <>
-                      <Check className="h-4 w-4 mr-2" />
-                      Ogrenildi
-                    </>
-                  ) : (
-                    <>
-                      <BookmarkPlus className="h-4 w-4 mr-2" />
-                      Ogrendi Isaretle
-                    </>
-                  )}
-                </Button>
-                <Button variant="outline" size="icon" onClick={handleNextCard}>
-                  <ArrowRight className="h-5 w-5" />
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">Filtreye uygun kelime bulunamadi</p>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* Learn Mode */}
-        <TabsContent value="learn" className="mt-6">
-          <LearnMode 
-            words={filteredWords} 
-            onComplete={(results) => {
-              results.correct.forEach(id => {
-                setLearnedWords(prev => new Set([...prev, id]))
-              })
-            }}
-          />
-        </TabsContent>
-      </Tabs>
-
-      {/* Flashcard CSS */}
-      <style jsx global>{`
-        .perspective-1000 {
-          perspective: 1000px;
-        }
-        .transform-style-preserve-3d {
-          transform-style: preserve-3d;
-        }
-        .backface-hidden {
-          backface-visibility: hidden;
-        }
-        .rotate-y-180 {
-          transform: rotateY(180deg);
-        }
-      `}</style>
-    </div>
-  )
-}
-
-// Word Card Component
-function WordCard({ 
-  word, 
-  isLearned, 
-  onMarkLearned, 
-  onSpeak,
-  levelColor 
-}: { 
-  word: Word
-  isLearned: boolean
-  onMarkLearned: () => void
-  onSpeak: () => void
-  levelColor: string
-}) {
-  const [expanded, setExpanded] = useState(false)
-
-  return (
-    <Card className={cn(
-      "transition-all hover:shadow-lg hover:shadow-primary/5",
-      isLearned && "border-green-500/50 bg-green-500/5"
-    )}>
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-xl font-bold">{word.english}</h3>
-              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onSpeak}>
-                <Volume2 className="h-4 w-4" />
-              </Button>
-            </div>
-            <p className="text-sm text-muted-foreground">{word.pronunciation}</p>
-          </div>
-          <Badge className={levelColor}>{word.level}</Badge>
-        </div>
-        
-        <p className="text-lg mb-2">{word.turkish}</p>
-        <Badge variant="outline" className="text-xs">{word.partOfSpeech}</Badge>
-
-        {expanded && (
-          <div className="mt-4 space-y-3">
-            <div>
-              <p className="text-sm font-medium mb-1">Ornekler:</p>
-              <ul className="space-y-1">
-                {word.examples.map((ex, i) => (
-                  <li key={i} className="text-sm text-muted-foreground">• {ex}</li>
-                ))}
-              </ul>
-            </div>
-            {word.synonyms && word.synonyms.length > 0 && (
-              <div>
-                <p className="text-sm font-medium mb-1">Es anlamlilar:</p>
-                <div className="flex flex-wrap gap-1">
-                  {word.synonyms.map((syn, i) => (
-                    <Badge key={i} variant="secondary" className="text-xs">{syn}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-            {word.antonyms && word.antonyms.length > 0 && (
-              <div>
-                <p className="text-sm font-medium mb-1">Zit anlamlilar:</p>
-                <div className="flex flex-wrap gap-1">
-                  {word.antonyms.map((ant, i) => (
-                    <Badge key={i} variant="outline" className="text-xs">{ant}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="flex items-center justify-between mt-4">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={() => setExpanded(!expanded)}
-          >
-            {expanded ? 'Gizle' : 'Detaylar'}
-            <ChevronRight className={cn("h-4 w-4 ml-1 transition-transform", expanded && "rotate-90")} />
-          </Button>
-          <Button 
-            variant={isLearned ? "default" : "outline"} 
-            size="sm"
-            onClick={onMarkLearned}
-          >
-            {isLearned ? <Check className="h-4 w-4" /> : <BookmarkPlus className="h-4 w-4" />}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-// Learn Mode Component
-function LearnMode({ 
-  words, 
-  onComplete 
-}: { 
-  words: Word[]
-  onComplete: (results: { correct: string[], incorrect: string[] }) => void
-}) {
-  const [currentIndex, setCurrentIndex] = useState(0)
-  const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null)
-  const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
-  const [results, setResults] = useState<{ correct: string[], incorrect: string[] }>({ correct: [], incorrect: [] })
-  const [showResults, setShowResults] = useState(false)
-
-  if (words.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-muted-foreground">Filtreye uygun kelime bulunamadi</p>
-      </div>
-    )
-  }
-
-  const currentWord = words[currentIndex]
-  
-  // Generate options including the correct answer and 3 random wrong answers
-  const generateOptions = () => {
-    const correctAnswer = currentWord.turkish
-    const wrongAnswers = words
-      .filter(w => w.id !== currentWord.id)
-      .sort(() => Math.random() - 0.5)
-      .slice(0, 3)
-      .map(w => w.turkish)
-    
-    return [...wrongAnswers, correctAnswer].sort(() => Math.random() - 0.5)
-  }
-
-  const [options] = useState(generateOptions)
-
-  const handleAnswer = (answer: string) => {
-    if (selectedAnswer) return
-    
-    setSelectedAnswer(answer)
-    const correct = answer === currentWord.turkish
-    setIsCorrect(correct)
-
-    if (correct) {
-      setResults(prev => ({ ...prev, correct: [...prev.correct, currentWord.id] }))
-    } else {
-      setResults(prev => ({ ...prev, incorrect: [...prev.incorrect, currentWord.id] }))
-    }
-  }
-
-  const handleNext = () => {
-    if (currentIndex < words.length - 1) {
-      setCurrentIndex(currentIndex + 1)
-      setSelectedAnswer(null)
-      setIsCorrect(null)
-    } else {
-      setShowResults(true)
-      onComplete(results)
-    }
-  }
-
-  const handleRestart = () => {
-    setCurrentIndex(0)
-    setSelectedAnswer(null)
-    setIsCorrect(null)
-    setResults({ correct: [], incorrect: [] })
-    setShowResults(false)
-  }
-
-  if (showResults) {
-    const score = (results.correct.length / words.length) * 100
-    return (
-      <Card className="max-w-lg mx-auto">
-        <CardContent className="pt-6 text-center">
-          <h2 className="text-2xl font-bold mb-4">Sonuclar</h2>
-          <div className="mb-6">
-            <div className="text-5xl font-bold mb-2">{Math.round(score)}%</div>
-            <Progress value={score} className="h-3 mb-4" />
-            <div className="flex justify-center gap-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-500">{results.correct.length}</div>
-                <div className="text-sm text-muted-foreground">Dogru</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-red-500">{results.incorrect.length}</div>
-                <div className="text-sm text-muted-foreground">Yanlis</div>
-              </div>
-            </div>
-          </div>
-          <Button onClick={handleRestart}>
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Tekrar Calis
-          </Button>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <div className="max-w-lg mx-auto">
-      <div className="mb-4 flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">
-          Soru {currentIndex + 1} / {words.length}
-        </span>
-        <Progress value={((currentIndex + 1) / words.length) * 100} className="w-32 h-2" />
-      </div>
-
-      <Card className="mb-6">
-        <CardContent className="pt-6 text-center">
-          <Badge className="mb-4" variant="outline">{currentWord.level}</Badge>
-          <h2 className="text-3xl font-bold mb-2">{currentWord.english}</h2>
-          <p className="text-muted-foreground">{currentWord.pronunciation}</p>
-          <p className="mt-2 text-sm text-muted-foreground italic">
-            {currentWord.examples[0]}
-          </p>
-        </CardContent>
-      </Card>
-
-      <div className="space-y-3">
-        <p className="text-sm font-medium text-center mb-4">Dogru anlami secin:</p>
-        {options.map((option, index) => (
-          <Button
-            key={index}
-            variant="outline"
-            className={cn(
-              "w-full justify-start text-left h-auto py-4 px-4",
-              selectedAnswer === option && isCorrect && "bg-green-500/20 border-green-500",
-              selectedAnswer === option && !isCorrect && "bg-red-500/20 border-red-500",
-              selectedAnswer && option === currentWord.turkish && "bg-green-500/20 border-green-500"
-            )}
-            onClick={() => handleAnswer(option)}
-            disabled={!!selectedAnswer}
-          >
-            {option}
-            {selectedAnswer === option && isCorrect && <Check className="h-5 w-5 ml-auto text-green-500" />}
-            {selectedAnswer === option && !isCorrect && <X className="h-5 w-5 ml-auto text-red-500" />}
-            {selectedAnswer && option === currentWord.turkish && selectedAnswer !== option && (
-              <Check className="h-5 w-5 ml-auto text-green-500" />
-            )}
-          </Button>
-        ))}
-      </div>
-
-      {selectedAnswer && (
-        <div className="mt-6 text-center">
-          <div className={cn(
-            "mb-4 p-4 rounded-lg",
-            isCorrect ? "bg-green-500/20" : "bg-red-500/20"
-          )}>
-            {isCorrect ? (
-              <p className="text-green-400 font-medium">Dogru! Harika gidiyorsun.</p>
-            ) : (
-              <p className="text-red-400 font-medium">
-                Yanlis. Dogru cevap: <span className="font-bold">{currentWord.turkish}</span>
-              </p>
-            )}
-          </div>
-          <Button onClick={handleNext}>
-            {currentIndex < words.length - 1 ? 'Sonraki Soru' : 'Sonuclari Gor'}
-            <ChevronRight className="h-4 w-4 ml-2" />
-          </Button>
-        </div>
-      )}
+      <LevelTabsLayout moduleKey="vocab" content={CONTENT} />
     </div>
   )
 }

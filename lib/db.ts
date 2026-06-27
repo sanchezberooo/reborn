@@ -7,10 +7,14 @@ function db() {
   return getSupabaseBrowser()
 }
 
+let _userId: string | null = null
+
 async function uid(): Promise<string> {
-  const { data: { user } } = await db().auth.getUser()
-  if (!user) throw new Error('Not authenticated')
-  return user.id
+  if (_userId) return _userId
+  const { data } = await db().from('profiles').select('id').limit(1).single()
+  if (!data?.id) throw new Error('No profile found — POST /api/setup to seed.')
+  _userId = data.id as string
+  return _userId
 }
 
 // ─── Profile ──────────────────────────────────────────────────────────────────
@@ -91,7 +95,7 @@ export async function dbSaveConversation(
 ): Promise<void> {
   const userId = await uid()
   const { error } = await db().from('conversations').upsert(
-    { id: sessionId, title, messages, user_id: userId },
+    { id: sessionId, title, messages, user_id: userId, updated_at: new Date().toISOString() },
     { onConflict: 'id' }
   )
   if (error) throw error

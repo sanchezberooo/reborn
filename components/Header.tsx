@@ -1,8 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { getSupabaseBrowser } from '@/lib/supabase'
+import { usePathname } from 'next/navigation'
 
 const tabs = [
   { href: '/', label: 'Sanchez' },
@@ -12,14 +11,6 @@ const tabs = [
 
 export default function Header() {
   const pathname = usePathname()
-  const router = useRouter()
-
-  async function handleLogout() {
-    const supabase = getSupabaseBrowser()
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
 
   return (
     <header
@@ -61,29 +52,6 @@ export default function Header() {
         })}
       </nav>
 
-      {/* Right: logout */}
-      <div className="flex items-center gap-3 shrink-0">
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-          style={{ color: '#3a3a3a', border: '1px solid #1a1a1a' }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = '#c86e6e'
-            e.currentTarget.style.borderColor = 'rgba(200,110,110,0.2)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = '#3a3a3a'
-            e.currentTarget.style.borderColor = '#1a1a1a'
-          }}
-        >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-          Çıkış
-        </button>
-      </div>
     </header>
   )
 }

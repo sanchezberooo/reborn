@@ -152,11 +152,10 @@ function AddModal({ onClose, onAdd }: {
 // ─── milestone card ───────────────────────────────────────────────────────────
 
 function MilestoneCard({
-  milestone, index, onStatusChange,
+  milestone, onStatusChange,
 }: {
   milestone: Milestone
-  index: number
-  onStatusChange: (index: number, status: Milestone['status']) => void
+  onStatusChange: (title: string, date: string, status: Milestone['status']) => void
 }) {
   const days = daysUntil(milestone.date)
   const color = urgencyColor(days, milestone.status)
@@ -165,7 +164,7 @@ function MilestoneCard({
   const statusCycle: Milestone['status'][] = ['pending', 'in_progress', 'done']
   function nextStatus() {
     const i = statusCycle.indexOf(milestone.status)
-    onStatusChange(index, statusCycle[(i + 1) % statusCycle.length])
+    onStatusChange(milestone.title, milestone.date, statusCycle[(i + 1) % statusCycle.length])
   }
 
   return (
@@ -266,13 +265,10 @@ export default function RoadmapPage() {
   const pendingCount = milestones.filter((m) => m.status === 'pending' || m.status === 'in_progress').length
   const progress     = milestones.length > 0 ? Math.round((doneCount / milestones.length) * 100) : 0
 
-  async function handleStatusChange(index: number, status: Milestone['status']) {
-    const updated = sorted.map((m, i) => i === index ? { ...m, status } : m)
-    // Sync with Supabase (reorder to original unsorted order)
-    const newMilestones = milestones.map((orig) => {
-      const found = updated.find((u) => u.title === orig.title && u.date === orig.date)
-      return found ?? orig
-    })
+  async function handleStatusChange(title: string, date: string, status: Milestone['status']) {
+    const newMilestones = milestones.map((m) =>
+      m.title === title && m.date === date ? { ...m, status } : m
+    )
     setModule((prev) => prev ? { ...prev, data: { ...prev.data, milestones: newMilestones } } : prev)
     dbExecuteAction({
       type: 'UPDATE_MODULE',
@@ -395,7 +391,6 @@ export default function RoadmapPage() {
               <MilestoneCard
                 key={`${m.title}-${m.date}-${i}`}
                 milestone={m}
-                index={i}
                 onStatusChange={handleStatusChange}
               />
             ))

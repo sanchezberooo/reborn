@@ -1,24 +1,45 @@
 import { supabase } from '@/lib/supabase'
 
-const BERO_ID = process.env.NEXT_PUBLIC_BERO_ID ?? '00000000-0000-0000-0000-000000000001'
-
-// Checks each table and inserts the default profile row if missing
 export async function POST() {
-  const results: Record<string, string> = {}
+  // Check if a profile already exists
+  const { data: existing, error: selectErr } = await supabase
+    .from('profiles')
+    .select('id')
+    .limit(1)
+    .single()
 
-  // 1. Profile row
-  try {
-    const { error } = await supabase
-      .from('profiles')
-      .upsert({ id: BERO_ID }, { onConflict: 'id' })
-    results['profiles:seed'] = error ? `❌ ${error.message}` : '✅ OK'
-  } catch (e) {
-    results['profiles:seed'] = `❌ ${String(e)}`
+  if (selectErr && selectErr.code !== 'PGRST116') {
+    return Response.json({ ok: false, error: selectErr.message }, { status: 500 })
   }
 
-  return Response.json({ results })
+  if (existing?.id) {
+    return Response.json({ ok: true, userId: existing.id, note: 'already seeded' })
+  }
+
+  // No profile — create one with a fresh UUID
+  const { data: created, error: insertErr } = await supabase
+    .from('profiles')
+    .insert({})
+    .select('id')
+    .single()
+
+  if (insertErr) {
+    return Response.json({ ok: false, error: insertErr.message }, { status: 500 })
+  }
+
+  return Response.json({ ok: true, userId: created.id, note: 'created' })
 }
 
 export async function GET() {
-  return Response.json({ message: 'POST to this endpoint to seed default data.' })
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id')
+    .limit(1)
+    .single()
+
+  if (error || !data) {
+    return Response.json({ seeded: false, note: 'POST /api/setup to seed.' })
+  }
+
+  return Response.json({ seeded: true, userId: data.id })
 }

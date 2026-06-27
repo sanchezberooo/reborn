@@ -18,13 +18,8 @@ create table if not exists public.profiles (
   updated_at           timestamptz not null default now()
 );
 
-alter table public.profiles enable row level security;
-
-create policy "Users can view own profile"
-  on public.profiles for select using (auth.uid() = id);
-
-create policy "Users can upsert own profile"
-  on public.profiles for all using (auth.uid() = id);
+-- RLS disabled: single-user app, no auth session required.
+-- alter table public.profiles enable row level security;
 
 -- ── memories ────────────────────────────────────────────────
 create table if not exists public.memories (

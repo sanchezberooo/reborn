@@ -35,7 +35,7 @@ function ConvItem({
         <p className="text-[12px] text-muted group-hover:text-foreground/70 line-clamp-1 leading-snug transition-colors">
           {conv.title}
         </p>
-        <p className="text-[10px] text-muted/30 mt-0.5">
+        <p className="text-[10px] text-muted/60 mt-0.5">
           {new Date(conv.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
         </p>
       </button>
@@ -66,7 +66,7 @@ function DateGroup({
   if (items.length === 0) return null
   return (
     <div className="mb-3">
-      <p className="text-[10px] text-muted/40 uppercase tracking-wider px-2 mb-1.5">{label}</p>
+      <p className="text-[10px] text-muted/60 uppercase tracking-wider px-2 mb-1.5">{label}</p>
       {items.map((conv) => (
         <ConvItem key={conv.id} conv={conv} onLoad={onLoad} onDelete={onDelete} />
       ))}
@@ -151,17 +151,17 @@ export default function Sidebar() {
       <div className="flex-1 overflow-y-auto px-3 pb-3">
         {filtered ? (
           filtered.length === 0 ? (
-            <p className="px-2 py-1.5 text-[11px] text-muted/40">Sonuç bulunamadı</p>
+            <p className="px-2 py-1.5 text-[11px] text-muted/60">Sonuç bulunamadı</p>
           ) : (
             <>
-              <p className="text-[10px] text-muted/40 uppercase tracking-wider px-2 mb-2">Sonuçlar</p>
+              <p className="text-[10px] text-muted/60 uppercase tracking-wider px-2 mb-2">Sonuçlar</p>
               {filtered.map((conv) => (
                 <ConvItem key={conv.id} conv={conv} onLoad={onLoad} onDelete={onDelete} />
               ))}
             </>
           )
         ) : conversations.length === 0 ? (
-          <p className="px-2 py-1.5 text-[11px] text-muted/40">Henüz sohbet yok</p>
+          <p className="px-2 py-1.5 text-[11px] text-muted/60">Henüz sohbet yok</p>
         ) : (
           <>
             <DateGroup label="Bugün" items={today} onLoad={onLoad} onDelete={onDelete} />

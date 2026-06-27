@@ -1,506 +1,270 @@
 'use client'
 
-import { useState } from 'react'
-import { 
-  BookText, 
-  Clock, 
-  CheckCircle2,
-  XCircle,
-  ChevronRight,
-  Eye,
-  Volume2,
-  Bookmark,
-  RotateCcw
-} from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { Level, ReadingMaterial } from '../lib/types'
-import { cn } from '@/lib/utils'
+import { LevelTabsLayout, ReadingCard, type LevelContent } from './level-tabs'
 
-// Sample reading materials
-const readingMaterials: ReadingMaterial[] = [
-  {
-    id: '1',
-    title: 'The Power of Daily Habits',
-    content: `Every day, we make countless decisions that shape our lives. From the moment we wake up to the time we go to sleep, our habits guide us through the day. But what makes some habits stick while others fade away?
-
-Research shows that successful people share common habits. They wake up early, exercise regularly, and set clear goals. They read books, learn new skills, and take care of their health. Most importantly, they stay consistent.
-
-Building good habits takes time and patience. Experts suggest starting small. Instead of trying to change everything at once, focus on one habit at a time. Make it easy to do the right thing. Put your running shoes by the door. Keep healthy snacks visible. Remove distractions from your workspace.
-
-The key is to make your desired behavior the path of least resistance. When good habits become automatic, you free up mental energy for more important decisions. Your daily routines become the foundation for success.
-
-Remember, you don't have to be perfect. Missing one day won't ruin your progress. What matters is getting back on track. The most successful people aren't those who never fail—they're the ones who never give up.`,
-    level: 'B1',
-    category: 'Self-Improvement',
-    wordCount: 195,
-    readingTime: 3,
-    vocabulary: ['countless', 'consistent', 'automatic', 'foundation', 'resistance'],
-    questions: [
-      {
-        question: 'What do successful people have in common according to the text?',
-        options: [
-          'They sleep late',
-          'They share common habits like waking up early and exercising',
-          'They avoid reading books',
-          'They change everything at once'
-        ],
-        answer: 1
-      },
-      {
-        question: 'What do experts suggest for building good habits?',
-        options: [
-          'Change all habits at once',
-          'Start with the most difficult habits',
-          'Start small and focus on one habit at a time',
-          'Avoid setting goals'
-        ],
-        answer: 2
-      },
-      {
-        question: 'What happens when good habits become automatic?',
-        options: [
-          'You become lazy',
-          'You free up mental energy for more important decisions',
-          'You stop making progress',
-          'You need to work harder'
-        ],
-        answer: 1
-      }
-    ]
-  },
-  {
-    id: '2',
-    title: 'Climate Change and Our Future',
-    content: `Climate change is one of the most pressing issues of our time. Scientists around the world agree that human activities are causing the Earth's temperature to rise at an unprecedented rate. The consequences are already visible: melting ice caps, rising sea levels, and more frequent extreme weather events.
-
-The main cause of climate change is the burning of fossil fuels—coal, oil, and natural gas. These release carbon dioxide and other greenhouse gases into the atmosphere, trapping heat and warming the planet. Deforestation and industrial processes also contribute significantly to this problem.
-
-However, there is hope. Countries are increasingly turning to renewable energy sources like solar and wind power. Electric vehicles are becoming more common on our roads. Many businesses are adopting sustainable practices to reduce their carbon footprint.
-
-Individual actions matter too. Simple changes like using less energy at home, eating less meat, and reducing waste can make a difference. Walking or cycling instead of driving, using public transportation, and supporting environmentally conscious companies are all ways to help.
-
-The transition to a sustainable future will require cooperation at all levels—from individuals to governments to international organizations. The technology exists; what we need now is the collective will to implement change before it's too late.`,
-    level: 'B2',
-    category: 'Environment',
-    wordCount: 218,
-    readingTime: 4,
-    vocabulary: ['unprecedented', 'consequences', 'deforestation', 'sustainable', 'transition'],
-    questions: [
-      {
-        question: 'What is the main cause of climate change mentioned in the text?',
-        options: [
-          'Solar radiation',
-          'The burning of fossil fuels',
-          'Volcanic eruptions',
-          'Ocean currents'
-        ],
-        answer: 1
-      },
-      {
-        question: 'Which of the following is NOT mentioned as a consequence of climate change?',
-        options: [
-          'Melting ice caps',
-          'Rising sea levels',
-          'More earthquakes',
-          'Extreme weather events'
-        ],
-        answer: 2
-      },
-      {
-        question: 'What does the text suggest about individual actions?',
-        options: [
-          'They are meaningless',
-          'Only governments can make a difference',
-          'Simple changes can make a difference',
-          'We should wait for new technology'
-        ],
-        answer: 2
-      }
-    ]
-  },
-  {
-    id: '3',
-    title: 'The Art of Communication',
-    content: `Effective communication is a skill that can transform your personal and professional life. Whether you're giving a presentation, having a difficult conversation, or simply trying to connect with someone, the way you communicate matters.
-
-Listening is perhaps the most underrated aspect of communication. Most people listen to respond rather than to understand. Active listening means giving your full attention, asking clarifying questions, and showing empathy. When people feel heard, they become more open and cooperative.
-
-Body language speaks volumes. Your posture, eye contact, and facial expressions can reinforce or contradict your words. Crossing your arms might signal defensiveness, while maintaining eye contact shows confidence and interest. Being aware of these nonverbal cues helps you communicate more effectively.
-
-Clarity is essential. Use simple, direct language whenever possible. Avoid jargon unless you're sure your audience understands it. Structure your thoughts before speaking, and don't be afraid to pause. Silence can be powerful—it gives both you and your listener time to think.
-
-Finally, adapt your communication style to your audience. What works with friends might not work in a business meeting. Consider cultural differences, personal preferences, and the context of your conversation. The best communicators are flexible and responsive to the needs of their listeners.`,
-    level: 'B2',
-    category: 'Communication',
-    wordCount: 224,
-    readingTime: 4,
-    vocabulary: ['underrated', 'empathy', 'posture', 'contradict', 'jargon'],
-    questions: [
-      {
-        question: 'What does the text say about listening?',
-        options: [
-          'It is the most practiced skill',
-          'Most people listen to respond rather than understand',
-          'It is not important for communication',
-          'It should be avoided in difficult conversations'
-        ],
-        answer: 1
-      },
-      {
-        question: 'According to the text, what does crossing your arms signal?',
-        options: [
-          'Confidence',
-          'Interest',
-          'Defensiveness',
-          'Agreement'
-        ],
-        answer: 2
-      },
-      {
-        question: 'What advice does the text give about communication style?',
-        options: [
-          'Always use the same style',
-          'Use complex language to impress',
-          'Adapt your style to your audience',
-          'Avoid pauses when speaking'
-        ],
-        answer: 2
-      }
-    ]
-  }
-]
-
-export function ReadingModule() {
-  const [selectedLevel, setSelectedLevel] = useState<Level | 'all'>('all')
-  const [activeReading, setActiveReading] = useState<ReadingMaterial | null>(null)
-
-  const filteredMaterials = readingMaterials.filter(material => 
-    selectedLevel === 'all' || material.level === selectedLevel
-  )
-
-  const levelColors: Record<Level, string> = {
-    'A1': 'bg-green-500/20 text-green-400 border-green-500/30',
-    'A2': 'bg-lime-500/20 text-lime-400 border-lime-500/30',
-    'B1': 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-    'B2': 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-    'C1': 'bg-red-500/20 text-red-400 border-red-500/30',
-    'C2': 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  }
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Okuma Pratigi</h1>
-          <p className="text-muted-foreground">Okuma becerilerini gelistir</p>
-        </div>
-      </div>
-
-      {activeReading ? (
-        <ReadingDetail 
-          material={activeReading} 
-          onBack={() => setActiveReading(null)}
-          levelColor={levelColors[activeReading.level]}
-        />
-      ) : (
-        <>
-          {/* Filters */}
-          <div className="flex items-center gap-4">
-            <Select value={selectedLevel} onValueChange={(v) => setSelectedLevel(v as Level | 'all')}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Seviye" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tum Seviyeler</SelectItem>
-                <SelectItem value="A1">A1 - Baslangic</SelectItem>
-                <SelectItem value="A2">A2 - Temel</SelectItem>
-                <SelectItem value="B1">B1 - Orta</SelectItem>
-                <SelectItem value="B2">B2 - Orta Ustu</SelectItem>
-                <SelectItem value="C1">C1 - Ileri</SelectItem>
-                <SelectItem value="C2">C2 - Uzman</SelectItem>
-              </SelectContent>
-            </Select>
-            <Badge variant="outline">{filteredMaterials.length} metin</Badge>
-          </div>
-
-          {/* Reading List */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredMaterials.map((material) => (
-              <Card 
-                key={material.id}
-                className="cursor-pointer transition-all hover:shadow-lg hover:shadow-primary/5 hover:border-primary/50"
-                onClick={() => setActiveReading(material)}
-              >
-                <CardContent className="pt-6">
-                  <div className="flex items-start justify-between mb-3">
-                    <Badge className={levelColors[material.level]}>{material.level}</Badge>
-                    <Badge variant="outline">{material.category}</Badge>
-                  </div>
-                  <h3 className="text-xl font-bold mb-2">{material.title}</h3>
-                  <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-                    {material.content.substring(0, 150)}...
-                  </p>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <BookText className="h-4 w-4" />
-                      {material.wordCount} kelime
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-4 w-4" />
-                      {material.readingTime} dk
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between mt-4">
-                    <span className="text-sm text-muted-foreground">
-                      {material.questions.length} soru
-                    </span>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  )
+const CONTENT: LevelContent = {
+  A1: [
+    {
+      id: 'my-name',
+      title: 'My Name is Ali',
+      body: <ReadingCard
+        text="My name is Ali. I am 22 years old. I am from Turkey. I live in Istanbul. I am a student. I study English at university. I have one sister. Her name is Zeynep. She is 18 years old. My mother is a teacher and my father is a doctor. I like football and music. My favourite colour is blue."
+        questions={[
+          "How old is Ali?",
+          "Where does Ali live?",
+          "What does Ali study?",
+          "What are Ali's hobbies?",
+        ]}
+      />,
+    },
+    {
+      id: 'my-house',
+      title: 'My House',
+      body: <ReadingCard
+        text="I live in a small flat in Ankara. My flat has three rooms: a kitchen, a bedroom and a living room. There is a big sofa in the living room. I watch TV there every evening. My bedroom is small but comfortable. There is a desk and a bookshelf in my bedroom. I read books every night before I sleep. My favourite room is the kitchen because I love cooking."
+        questions={[
+          "How many rooms does the flat have?",
+          "What is in the living room?",
+          "What does the writer do every night?",
+          "Why is the kitchen the writer's favourite room?",
+        ]}
+      />,
+    },
+    {
+      id: 'a-school-day',
+      title: 'A School Day',
+      body: <ReadingCard
+        text="Sara wakes up at seven o'clock every morning. She has breakfast with her family. She eats bread, cheese and drinks tea. Then she goes to school by bus. Her school starts at eight thirty. She has five lessons every day. At lunchtime, she eats in the school canteen with her friends. After school, she does her homework. In the evening, she watches TV or reads a book. She goes to bed at ten o'clock."
+        questions={[
+          "What time does Sara wake up?",
+          "How does Sara go to school?",
+          "What does Sara eat for breakfast?",
+          "What does Sara do after school?",
+        ]}
+      />,
+    },
+    {
+      id: 'my-pet',
+      title: 'My Pet',
+      body: <ReadingCard
+        text="I have a cat. Her name is Luna. She is three years old. Luna is black and white. She is small but very playful. She likes sleeping in my bed. Every morning she wakes me up because she wants food. She eats fish and special cat food. Luna doesn't like dogs. She is afraid of loud noises. I love Luna very much. She is my best friend."
+        questions={[
+          "What is the name of the cat?",
+          "What colour is the cat?",
+          "Why does the cat wake the writer up every morning?",
+          "What is the cat afraid of?",
+        ]}
+      />,
+    },
+    {
+      id: 'food-I-like',
+      title: 'Food I Like',
+      body: <ReadingCard
+        text="My name is Mert. I love food! My favourite food is pizza. I eat pizza every Saturday with my family. I also like soup. My mother makes very good lentil soup. I don't like vegetables. I know they are good for me, but I don't like the taste. My favourite drink is orange juice. In the morning, I always have a glass of orange juice. At school, I eat a sandwich at lunchtime. In the evening, we eat dinner together as a family. I think family dinners are very important."
+        questions={[
+          "What is Mert's favourite food?",
+          "When does Mert eat pizza?",
+          "What doesn't Mert like?",
+          "What does Mert have at lunchtime?",
+          "What does Mert think about family dinners?",
+        ]}
+      />,
+    },
+    {
+      id: 'the-market',
+      title: 'At the Market',
+      body: <ReadingCard
+        text="Every Sunday, my family goes to the market. We buy fresh fruit and vegetables there. The market is near our house. There are many stalls at the market. We always buy tomatoes, onions and potatoes. My mother likes talking to the sellers. She always asks about the prices. The vegetables at the market are cheaper than at the supermarket. My favourite part is the fruit stall. I love strawberries and apples. After the market, we go home and have lunch together."
+        questions={[
+          "When does the family go to the market?",
+          "Where is the market?",
+          "What vegetables do they always buy?",
+          "Why is the market better than the supermarket?",
+          "What is the writer's favourite part of the market?",
+        ]}
+      />,
+    },
+  ],
+  A2: [
+    {
+      id: 'a-holiday',
+      title: 'A Holiday in Cappadocia',
+      body: <ReadingCard
+        text="Last summer, my family and I went on a holiday to Cappadocia. It was an amazing experience. Cappadocia is a region in central Turkey, known for its unusual rock formations called 'fairy chimneys'. We stayed there for five days. On the first day, we took a hot air balloon ride at sunrise. Looking down from the sky, everything looked magical. We visited underground cities and old cave churches. The local food was delicious — we especially enjoyed the pottery kebab. On our last evening, we watched the sunset over the valley. It was the most beautiful view I have ever seen. I would love to visit Cappadocia again."
+        questions={[
+          "Where did the family go on holiday?",
+          "How long did they stay?",
+          "What did they do on the first day?",
+          "What food did they enjoy?",
+          "Would the writer go back to Cappadocia? How do you know?",
+        ]}
+      />,
+    },
+    {
+      id: 'social-media',
+      title: 'Social Media: Good or Bad?',
+      body: <ReadingCard
+        text="Social media has changed the way we communicate. Today, millions of people use platforms like Instagram, Twitter, and TikTok every day. There are many advantages to social media. It helps people stay connected with friends and family. It allows people to share information and news quickly. Businesses can also use social media to reach their customers. However, there are some disadvantages too. Some people spend too much time on social media instead of doing other things. It can also cause people to compare themselves to others and feel unhappy. Additionally, there is a lot of false information on social media. Overall, social media is a powerful tool, but it is important to use it wisely."
+        questions={[
+          "Name two advantages of social media mentioned in the text.",
+          "What are two disadvantages of social media?",
+          "How can businesses use social media?",
+          "What does the writer think about social media overall?",
+          "Do you agree with the writer's opinion? Why / Why not?",
+        ]}
+      />,
+    },
+    {
+      id: 'city-vs-countryside',
+      title: 'City Life vs. Country Life',
+      body: <ReadingCard
+        text="Many people dream of living in the countryside, but most people actually live in cities. City life has many benefits. There are more job opportunities, better hospitals, and more entertainment options. Public transport is usually more convenient in cities too. On the other hand, the countryside offers a quieter, more peaceful life. The air is cleaner and there is more green space. People in rural areas often know their neighbours and have a stronger sense of community. However, there are fewer job opportunities in the countryside, and people may need to travel far for services. Both lifestyles have their pros and cons, and the best choice depends on what you value most."
+        questions={[
+          "What are two advantages of city life?",
+          "What are two advantages of country life?",
+          "What is one disadvantage of living in the countryside?",
+          "What does 'sense of community' mean in this context?",
+          "Which type of life would you prefer? Give reasons.",
+        ]}
+      />,
+    },
+    {
+      id: 'a-job-application',
+      title: 'Getting a Job',
+      body: <ReadingCard
+        text="Finding a job can be a challenging process. First, you need to write a good CV (curriculum vitae). A CV is a document that lists your education, work experience, and skills. It is important to make your CV clear and well-organised. After sending your CV, you might be invited to an interview. At the interview, you will answer questions about yourself and your experience. It is important to prepare for the interview by researching the company. You should dress professionally and arrive on time. During the interview, try to be confident and speak clearly. After the interview, it is polite to send a thank-you email to the interviewer. The whole process requires patience, but with the right preparation, you can succeed."
+        questions={[
+          "What is a CV?",
+          "What should you do to prepare for an interview?",
+          "What should you do after the interview?",
+          "Why is patience important in the job-search process?",
+          "What does 'professionally' mean when used about dressing?",
+        ]}
+      />,
+    },
+    {
+      id: 'healthy-eating',
+      title: 'Healthy Eating Habits',
+      body: <ReadingCard
+        text="We all know that eating well is important for our health, but many people find it difficult to maintain a healthy diet. A balanced diet includes plenty of fruits and vegetables, whole grains, lean proteins, and healthy fats. Nutritionists recommend eating at least five portions of fruit and vegetables every day. It is also important to limit the amount of sugar, salt, and processed food in our diet. Drinking enough water is essential too — most adults should drink around 2 litres a day. Regular mealtimes help the body maintain its rhythm. Skipping meals, especially breakfast, can lead to overeating later in the day. The key is to make small, sustainable changes rather than trying to change everything at once."
+        questions={[
+          "What does a balanced diet include?",
+          "How much fruit and vegetables should we eat per day?",
+          "Why is skipping breakfast a bad idea?",
+          "What does 'sustainable' mean in this context?",
+          "What advice does the text give about changing your diet?",
+        ]}
+      />,
+    },
+    {
+      id: 'a-letter-from-london',
+      title: 'A Letter from London',
+      body: <ReadingCard
+        text={"Dear Beren,\n\nI hope you are well! I am writing to tell you about my first week in London. As you know, I started my English language course on Monday. The school is in the centre of London, not far from the British Museum. There are students from 15 different countries in my class, which is really exciting. My teacher, Mr. Thompson, is very patient and funny.\n\nThe city is incredible. Everything is so busy and multicultural. I visited Tower Bridge yesterday and took so many photos! The public transport here is very efficient — I use the Tube every day. The only problem is that it is quite expensive to live here. A cup of coffee costs almost four pounds!\n\nI miss home, but I am really enjoying the experience. I will send you a postcard soon.\n\nLove, Ayla"}
+        questions={[
+          "Why is Ayla in London?",
+          "What does Ayla say about her teacher?",
+          "What did Ayla visit yesterday?",
+          "What problem does Ayla mention?",
+          "How does Ayla feel about being in London?",
+        ]}
+      />,
+    },
+  ],
+  B1: [
+    {
+      id: 'climate-change',
+      title: 'Climate Change: A Global Challenge',
+      body: <ReadingCard
+        text={"Climate change is one of the most pressing issues of our time. Scientific evidence shows that the Earth's temperature has been rising due to increased levels of greenhouse gases, particularly carbon dioxide, in the atmosphere. These gases trap heat from the sun and prevent it from escaping into space — a process known as the greenhouse effect. Human activities such as burning fossil fuels, deforestation, and industrial farming are the main contributors to this problem.\n\nThe consequences of climate change are already visible around the world. Rising sea levels threaten coastal communities. More frequent and intense storms, droughts, and wildfires are becoming the norm in many regions. Biodiversity is declining as ecosystems struggle to adapt to rapid environmental changes.\n\nAddressing climate change requires global cooperation. The Paris Agreement of 2015 brought together almost 200 countries to commit to limiting global temperature rises to below 2°C. However, many scientists argue that current commitments are insufficient. Individuals can also contribute by reducing energy consumption, choosing sustainable transport, and supporting businesses with green practices.\n\nThe challenge of climate change is immense, but it is not insurmountable. With political will, technological innovation, and individual action, a sustainable future remains achievable."}
+        questions={[
+          "What is the greenhouse effect, as described in the text?",
+          "Name three human activities that contribute to climate change.",
+          "What are three consequences of climate change mentioned?",
+          "What was the Paris Agreement?",
+          "Why might individual actions be insufficient on their own?",
+          "What does the writer suggest gives hope for the future?",
+          "Find a word in the text that means 'not possible to overcome'.",
+        ]}
+      />,
+    },
+    {
+      id: 'digital-world',
+      title: 'The Digital World and Mental Health',
+      body: <ReadingCard
+        text={"The rapid growth of digital technology has transformed virtually every aspect of modern life. While the benefits are undeniable — greater access to information, improved communication, and unprecedented opportunities for learning — concerns are mounting about the impact of excessive screen time on mental health.\n\nResearch has consistently linked heavy social media use with increased rates of anxiety, depression, and low self-esteem, particularly among adolescents. The curated nature of social media means that users are constantly exposed to idealised images of other people's lives, which can foster unhealthy comparison and dissatisfaction. Furthermore, the algorithms that govern social media platforms are designed to maximise engagement, which often means promoting emotionally charged or controversial content.\n\nHowever, it would be an oversimplification to conclude that digital technology is inherently harmful. Technology also enables people to connect with supportive communities, access mental health resources, and maintain long-distance relationships. The key lies in how we use it. Digital literacy — the ability to use technology thoughtfully and critically — is becoming an essential skill.\n\nExperts advocate for a balanced approach: setting boundaries around screen time, taking regular breaks, and cultivating offline hobbies and relationships."}
+        questions={[
+          "What benefits of digital technology does the text mention?",
+          "Why is heavy social media use particularly concerning for adolescents?",
+          "What does 'curated' mean in the context of social media?",
+          "Why are social media algorithms potentially harmful?",
+          "What is 'digital literacy'?",
+          "What practical advice does the text give for managing technology?",
+          "Does the writer take a completely negative view of digital technology? Explain.",
+        ]}
+      />,
+    },
+    {
+      id: 'artificial-intelligence',
+      title: 'Artificial Intelligence: Opportunity or Threat?',
+      body: <ReadingCard
+        text={"Artificial intelligence (AI) is no longer science fiction. From virtual assistants on smartphones to complex algorithms that diagnose diseases, AI has become embedded in our daily lives. Proponents argue that AI has the potential to revolutionise healthcare, education, and industry. In medicine, AI systems are already capable of detecting cancers more accurately than human doctors. In education, personalised learning platforms adapt to each student's needs and pace.\n\nDespite these promising developments, concerns about AI are widespread. Perhaps the most frequently cited worry is the displacement of workers. As automation becomes more sophisticated, entire categories of jobs may be eliminated. A report by the McKinsey Global Institute estimated that up to 375 million workers worldwide might need to change occupational categories by 2030.\n\nEthical questions also abound. Facial recognition technology raises serious privacy concerns. AI systems trained on biased data can perpetuate or even amplify existing inequalities. The question of accountability — who is responsible when an AI system makes a mistake — remains legally unresolved.\n\nMany experts argue that the solution is not to resist AI, but to ensure that its development is guided by robust ethical frameworks and international regulation."}
+        questions={[
+          "Give two examples of how AI is already being used.",
+          "What does 'displacement of workers' mean?",
+          "What did the McKinsey Global Institute report suggest?",
+          "What ethical concerns about AI are mentioned?",
+          "What does 'perpetuate' mean in the context of the text?",
+          "What solutions do experts propose to manage the risks of AI?",
+          "Do you think AI is more of an opportunity or a threat? Use ideas from the text.",
+        ]}
+      />,
+    },
+    {
+      id: 'language-learning',
+      title: 'Why Learn a Second Language?',
+      body: <ReadingCard
+        text={"Learning a second language is one of the most valuable investments a person can make in themselves. Beyond the obvious practical advantages — being able to communicate with more people and access more opportunities — research suggests that bilingualism has profound effects on the brain.\n\nStudies using brain imaging technology have shown that bilingual individuals have denser grey matter in areas associated with language, attention, and memory. Importantly, being bilingual appears to delay the onset of dementia by an average of four to five years. This cognitive benefit is believed to result from the constant mental effort required to manage two linguistic systems simultaneously.\n\nLanguage learning also fosters cultural empathy. When learners engage deeply with another language, they inevitably encounter different ways of seeing and describing the world. This exposure promotes greater tolerance and understanding of other cultures.\n\nFor those deterred by the difficulty of language learning, modern research offers encouragement. Adults are capable of achieving high levels of proficiency, particularly in reading and listening, even without the supposed 'critical period' advantage of early childhood. Consistent, meaningful exposure — through reading, conversation, and media — remains the most effective path to fluency."}
+        questions={[
+          "What are two practical advantages of learning a second language?",
+          "What do brain imaging studies show about bilingual individuals?",
+          "How does bilingualism appear to affect dementia?",
+          "How does language learning foster cultural empathy?",
+          "What does the text say to encourage adult language learners?",
+          "What is the 'critical period' mentioned in the text?",
+          "Summarise in one sentence the main argument of the text.",
+        ]}
+      />,
+    },
+    {
+      id: 'urbanisation',
+      title: 'The Growth of Cities',
+      body: <ReadingCard
+        text={"For the first time in human history, more people now live in cities than in rural areas. This global trend, known as urbanisation, is reshaping societies, economies, and environments at an unprecedented pace. The United Nations estimates that by 2050, approximately 68% of the world's population will live in urban areas.\n\nUrbanisation is driven by several factors. Rural-to-urban migration is often motivated by the search for economic opportunity, better education, and improved healthcare. In rapidly developing countries, the pace of urbanisation has been particularly dramatic. Cities in China, India, and sub-Saharan Africa are growing faster than planners can accommodate.\n\nThe consequences of rapid urbanisation are complex and multifaceted. On the positive side, cities generate the majority of economic output and innovation. Concentration of people facilitates the sharing of ideas and the development of specialised industries. However, rapid, unplanned urban growth often leads to inadequate housing, traffic congestion, pollution, and strain on public services. Informal settlements — sometimes called slums — are home to approximately one billion people worldwide.\n\nSustainable urban planning is increasingly recognised as essential. The concept of the 'smart city' — which uses technology to improve the efficiency of urban systems — is gaining traction. The challenge facing city planners worldwide is to make urban growth work for everyone, not just the privileged few."}
+        questions={[
+          "What does 'urbanisation' mean?",
+          "What percentage of the world's population will live in cities by 2050?",
+          "Why do people migrate from rural areas to cities?",
+          "Name two positive and two negative consequences of rapid urbanisation.",
+          "What is an 'informal settlement'?",
+          "What is a 'smart city'?",
+          "What does the writer argue is 'the challenge facing city planners'?",
+        ]}
+      />,
+    },
+  ],
 }
 
-// Reading Detail Component
-function ReadingDetail({
-  material,
-  onBack,
-  levelColor
-}: {
-  material: ReadingMaterial
-  onBack: () => void
-  levelColor: string
-}) {
-  const [showQuiz, setShowQuiz] = useState(false)
-  const [currentQuestion, setCurrentQuestion] = useState(0)
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null)
-  const [showResult, setShowResult] = useState(false)
-  const [score, setScore] = useState(0)
-  const [quizComplete, setQuizComplete] = useState(false)
-  const [showVocabulary, setShowVocabulary] = useState(false)
-
-  const speakText = (text: string) => {
-    const utterance = new SpeechSynthesisUtterance(text)
-    utterance.lang = 'en-US'
-    utterance.rate = 0.9
-    speechSynthesis.speak(utterance)
-  }
-
-  const handleAnswerSelect = (index: number) => {
-    if (showResult) return
-    setSelectedAnswer(index)
-  }
-
-  const handleCheckAnswer = () => {
-    setShowResult(true)
-    if (selectedAnswer === material.questions[currentQuestion].answer) {
-      setScore(score + 1)
-    }
-  }
-
-  const handleNextQuestion = () => {
-    if (currentQuestion < material.questions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1)
-      setSelectedAnswer(null)
-      setShowResult(false)
-    } else {
-      setQuizComplete(true)
-    }
-  }
-
-  const resetQuiz = () => {
-    setCurrentQuestion(0)
-    setSelectedAnswer(null)
-    setShowResult(false)
-    setScore(0)
-    setQuizComplete(false)
-  }
-
+export function ReadingModule() {
   return (
-    <div className="space-y-6">
-      <Button variant="ghost" onClick={onBack}>
-        <ChevronRight className="h-4 w-4 mr-2 rotate-180" />
-        Geri Don
-      </Button>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge className={levelColor}>{material.level}</Badge>
-        <Badge variant="outline">{material.category}</Badge>
-        <span className="text-sm text-muted-foreground flex items-center gap-1">
-          <BookText className="h-4 w-4" />
-          {material.wordCount} kelime
-        </span>
-        <span className="text-sm text-muted-foreground flex items-center gap-1">
-          <Clock className="h-4 w-4" />
-          {material.readingTime} dk
-        </span>
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ color: '#ffffff', fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Okuma</h2>
+        <p style={{ color: '#a0a0a0', fontSize: 13 }}>
+          Her metni oku, anlama sorularını gör, Sanchez ile tartış.
+        </p>
       </div>
-
-      <h1 className="text-3xl font-bold">{material.title}</h1>
-
-      {!showQuiz ? (
-        <>
-          {/* Reading Content */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex justify-end mb-4">
-                <Button variant="ghost" size="sm" onClick={() => speakText(material.content)}>
-                  <Volume2 className="h-4 w-4 mr-2" />
-                  Dinle
-                </Button>
-              </div>
-              <ScrollArea className="h-[400px] pr-4">
-                <div className="prose prose-invert max-w-none">
-                  {material.content.split('\n\n').map((paragraph, index) => (
-                    <p key={index} className="text-foreground leading-relaxed mb-4">
-                      {paragraph}
-                    </p>
-                  ))}
-                </div>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-
-          {/* Vocabulary */}
-          <Card>
-            <CardHeader>
-              <CardTitle 
-                className="flex items-center justify-between cursor-pointer"
-                onClick={() => setShowVocabulary(!showVocabulary)}
-              >
-                <span className="flex items-center gap-2">
-                  <Bookmark className="h-5 w-5" />
-                  Anahtar Kelimeler
-                </span>
-                <ChevronRight className={cn("h-5 w-5 transition-transform", showVocabulary && "rotate-90")} />
-              </CardTitle>
-            </CardHeader>
-            {showVocabulary && (
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {material.vocabulary.map((word, index) => (
-                    <Badge 
-                      key={index} 
-                      variant="secondary" 
-                      className="cursor-pointer hover:bg-primary/20"
-                      onClick={() => speakText(word)}
-                    >
-                      {word}
-                      <Volume2 className="h-3 w-3 ml-1" />
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            )}
-          </Card>
-
-          <Button onClick={() => setShowQuiz(true)} className="w-full">
-            Anlama Testine Basla
-            <ChevronRight className="h-4 w-4 ml-2" />
-          </Button>
-        </>
-      ) : (
-        /* Quiz Section */
-        <Card>
-          <CardContent className="pt-6">
-            {!quizComplete ? (
-              <>
-                <div className="flex items-center justify-between mb-6">
-                  <span className="text-sm text-muted-foreground">
-                    Soru {currentQuestion + 1} / {material.questions.length}
-                  </span>
-                  <Progress value={((currentQuestion + 1) / material.questions.length) * 100} className="w-32 h-2" />
-                </div>
-
-                <h3 className="text-xl font-semibold mb-6">
-                  {material.questions[currentQuestion].question}
-                </h3>
-
-                <div className="space-y-3">
-                  {material.questions[currentQuestion].options.map((option, index) => (
-                    <Button
-                      key={index}
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start h-auto py-4 px-4 text-left",
-                        selectedAnswer === index && !showResult && "border-primary bg-primary/10",
-                        showResult && index === material.questions[currentQuestion].answer && "bg-green-500/20 border-green-500",
-                        showResult && selectedAnswer === index && index !== material.questions[currentQuestion].answer && "bg-red-500/20 border-red-500"
-                      )}
-                      onClick={() => handleAnswerSelect(index)}
-                      disabled={showResult}
-                    >
-                      {option}
-                      {showResult && index === material.questions[currentQuestion].answer && (
-                        <CheckCircle2 className="h-5 w-5 ml-auto text-green-500" />
-                      )}
-                      {showResult && selectedAnswer === index && index !== material.questions[currentQuestion].answer && (
-                        <XCircle className="h-5 w-5 ml-auto text-red-500" />
-                      )}
-                    </Button>
-                  ))}
-                </div>
-
-                <div className="flex gap-2 mt-6">
-                  {!showResult ? (
-                    <Button 
-                      onClick={handleCheckAnswer} 
-                      disabled={selectedAnswer === null}
-                      className="flex-1"
-                    >
-                      Kontrol Et
-                    </Button>
-                  ) : (
-                    <Button onClick={handleNextQuestion} className="flex-1">
-                      {currentQuestion < material.questions.length - 1 ? 'Sonraki Soru' : 'Sonuclari Gor'}
-                      <ChevronRight className="h-4 w-4 ml-2" />
-                    </Button>
-                  )}
-                </div>
-              </>
-            ) : (
-              /* Results */
-              <div className="text-center">
-                <h2 className="text-2xl font-bold mb-4">Test Tamamlandi!</h2>
-                <div className="text-5xl font-bold mb-4">
-                  {Math.round((score / material.questions.length) * 100)}%
-                </div>
-                <Progress value={(score / material.questions.length) * 100} className="h-3 mb-6" />
-                <div className="flex justify-center gap-6 mb-6">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-500">{score}</div>
-                    <div className="text-sm text-muted-foreground">Dogru</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-red-500">{material.questions.length - score}</div>
-                    <div className="text-sm text-muted-foreground">Yanlis</div>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setShowQuiz(false)} className="flex-1">
-                    Metne Don
-                  </Button>
-                  <Button onClick={resetQuiz} className="flex-1">
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    Tekrar Dene
-                  </Button>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      <LevelTabsLayout moduleKey="reading" content={CONTENT} />
     </div>
   )
 }

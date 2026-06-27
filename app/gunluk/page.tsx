@@ -191,7 +191,7 @@ export default function GunlukPage() {
                       onClick={() => setSelectedDate(iso)}
                       title={moodVal > 0 ? `${iso}: Ruh hali ${moodVal}/10` : `${iso}: Kayıt yok`}
                     >
-                      <span style={{ fontSize: 9, color: moodVal > 0 ? moodColor : '#333', fontWeight: 600 }}>
+                      <span style={{ fontSize: 9, color: moodVal > 0 ? moodColor : '#666', fontWeight: 600 }}>
                         {moodVal > 0 ? moodVal : ''}
                       </span>
                       <div
@@ -206,7 +206,7 @@ export default function GunlukPage() {
                           boxSizing: 'border-box',
                         }}
                       />
-                      <span style={{ fontSize: 9, color: isToday2 ? '#c8a96e' : '#555', fontWeight: isToday2 ? 700 : 400 }}>
+                      <span style={{ fontSize: 9, color: isToday2 ? '#c8a96e' : '#888', fontWeight: isToday2 ? 700 : 400 }}>
                         {dayLabels[dow]}
                       </span>
                     </div>
@@ -217,7 +217,7 @@ export default function GunlukPage() {
                 {[['#22c55e', '8-10 İyi'],['#c8a96e', '5-7 Orta'],['#ef4444', '1-4 Zor']].map(([c, l]) => (
                   <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <span style={{ width: 7, height: 7, borderRadius: 2, background: c, display: 'inline-block' }} />
-                    <span style={{ fontSize: 10, color: '#555' }}>{l}</span>
+                    <span style={{ fontSize: 10, color: '#888' }}>{l}</span>
                   </div>
                 ))}
               </div>
@@ -325,7 +325,7 @@ export default function GunlukPage() {
               {/* Day headers */}
               <div className="grid grid-cols-7 mb-1">
                 {DAYS_SHORT.map((d) => (
-                  <span key={d} className="text-center text-[9px] text-muted/35 font-medium uppercase py-0.5">
+                  <span key={d} className="text-center text-[9px] text-muted/65 font-medium uppercase py-0.5">
                     {d}
                   </span>
                 ))}

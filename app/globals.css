@@ -34,7 +34,7 @@
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
   --color-border: var(--border);
-  --color-muted: var(--surface-3);
+  --color-muted: var(--text-muted);
   --color-muted-foreground: var(--text-muted);
   --color-card: var(--surface);
   --color-card-foreground: var(--foreground);

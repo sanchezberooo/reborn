@@ -39,7 +39,9 @@
       "Read(//tmp/**)",
       "Bash(node -e \"const pkg = require\\('./node_modules/lucide-react/package.json'\\); console.log\\('module:', pkg.module\\); console.log\\('main:', pkg.main\\); console.log\\('exports:', JSON.stringify\\(pkg.exports?.['.']\\).slice\\(0,200\\)\\)\")",
       "Bash(node -e \"const pkg = require\\('./node_modules/lucide-react/package.json'\\); console.log\\('version:', pkg.version\\); console.log\\('module:', pkg.module\\); console.log\\('main:', pkg.main\\); console.log\\('type:', pkg.type\\);\")",
-      "Bash(timeout 8)"
+      "Bash(timeout 8)",
+      "Bash(dir /b /a-d)",
+      "Bash(Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue)"
     ]
   }
 }

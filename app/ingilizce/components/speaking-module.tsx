@@ -1,618 +1,218 @@
-"use client";
+'use client'
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Mic,
-  MicOff,
-  Play,
-  RotateCcw,
-  Volume2,
-  CheckCircle2,
-  XCircle,
-  ArrowRight,
-  MessageSquare,
-  Users,
-  Presentation,
-} from "lucide-react";
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 
-const speakingExercises = [
-  {
-    id: 1,
-    type: "pronunciation",
-    title: "Telaffuz Pratiği",
-    icon: Volume2,
-    exercises: [
-      {
-        id: 1,
-        word: "through",
-        phonetic: "/θruː/",
-        turkishHint: "Dilini dişlerin arasına koy",
-        difficulty: "Orta",
-      },
-      {
-        id: 2,
-        word: "comfortable",
-        phonetic: "/ˈkʌmftəbl/",
-        turkishHint: "3 hece: KUMF-tuh-bl",
-        difficulty: "Zor",
-      },
-      {
-        id: 3,
-        word: "schedule",
-        phonetic: "/ˈʃedjuːl/",
-        turkishHint: "SHED-yool",
-        difficulty: "Orta",
-      },
-      {
-        id: 4,
-        word: "entrepreneur",
-        phonetic: "/ˌɒntrəprəˈnɜː/",
-        turkishHint: "ON-truh-pruh-NUR",
-        difficulty: "Zor",
-      },
-    ],
-  },
-  {
-    id: 2,
-    type: "roleplay",
-    title: "Rol Yapma",
-    icon: Users,
-    scenarios: [
-      {
-        id: 1,
-        title: "Restoranda Sipariş",
-        description: "Bir restoranda yemek siparişi verin",
-        prompts: [
-          "Garson: Good evening! Welcome to our restaurant. Table for how many?",
-          "Sen: ...",
-          "Garson: Perfect. Here's your menu. Can I get you something to drink?",
-          "Sen: ...",
-          "Garson: Are you ready to order?",
-          "Sen: ...",
-        ],
-        suggestedResponses: [
-          "Table for two, please.",
-          "I'd like a glass of water, please.",
-          "Yes, I'll have the grilled salmon with vegetables.",
-        ],
-      },
-      {
-        id: 2,
-        title: "İş Görüşmesi",
-        description: "Bir iş görüşmesinde kendinizi tanıtın",
-        prompts: [
-          "Interviewer: Tell me about yourself.",
-          "Sen: ...",
-          "Interviewer: Why do you want to work for our company?",
-          "Sen: ...",
-          "Interviewer: Where do you see yourself in 5 years?",
-          "Sen: ...",
-        ],
-        suggestedResponses: [
-          "I'm a software developer with 3 years of experience...",
-          "I admire your company's innovative approach to...",
-          "I see myself growing into a leadership role...",
-        ],
-      },
-    ],
-  },
-  {
-    id: 3,
-    type: "presentation",
-    title: "Sunum Pratiği",
-    icon: Presentation,
-    topics: [
-      {
-        id: 1,
-        title: "Kendinizi Tanıtın",
-        duration: "1-2 dakika",
-        points: [
-          "Your name and background",
-          "Your hobbies and interests",
-          "Your goals and aspirations",
-        ],
-        tips: [
-          "Göz teması kurun",
-          "Net ve yavaş konuşun",
-          "Bağlaç kelimeleri kullanın (First, Then, Finally)",
-        ],
-      },
-      {
-        id: 2,
-        title: "Favori Filminizi Anlatın",
-        duration: "2-3 dakika",
-        points: [
-          "Movie title and genre",
-          "Main plot summary",
-          "Why you like it",
-          "Would you recommend it?",
-        ],
-        tips: [
-          "Spoiler vermeden anlatın",
-          "Duygularınızı ifade edin",
-          "Karşılaştırmalar yapın",
-        ],
-      },
-    ],
-  },
-  {
-    id: 4,
-    type: "conversation",
-    title: "Günlük Konuşma",
-    icon: MessageSquare,
-    dialogues: [
-      {
-        id: 1,
-        title: "Tanışma",
-        lines: [
-          { speaker: "A", text: "Hi! I'm Sarah. Nice to meet you!" },
-          { speaker: "B", text: "Nice to meet you too! I'm [your name]." },
-          { speaker: "A", text: "Where are you from?" },
-          { speaker: "B", text: "I'm from Turkey. What about you?" },
-          { speaker: "A", text: "I'm from London. How long have you been here?" },
-          { speaker: "B", text: "I've been here for about two weeks." },
-        ],
-      },
-      {
-        id: 2,
-        title: "Yol Tarifi",
-        lines: [
-          { speaker: "A", text: "Excuse me, could you help me?" },
-          { speaker: "B", text: "Of course! What do you need?" },
-          { speaker: "A", text: "I'm looking for the train station." },
-          { speaker: "B", text: "Go straight and turn left at the traffic lights." },
-          { speaker: "A", text: "How far is it from here?" },
-          { speaker: "B", text: "It's about a 10-minute walk." },
-        ],
-      },
-    ],
-  },
-];
+const SPEAKING_DATA = {
+  A1: [
+    "Tell me about yourself. What's your name and where are you from?",
+    "What do you do every day? Describe your daily routine.",
+    "Describe your family. How many people are in your family?",
+    "What is your favourite food? Why do you like it?",
+    "What colours do you like? Describe something in your room.",
+    "What animals do you like? Do you have any pets?",
+    "What do you do in your free time?",
+    "What is the weather like today in your city?",
+    "Describe your bedroom. What is in it?",
+    "What do you usually eat for breakfast?",
+    "How do you go to school or work?",
+    "What time do you wake up and go to bed? Tell me about your day.",
+  ],
+  A2: [
+    "Describe a typical weekend. What do you usually do?",
+    "Talk about your hometown. What do you like about it?",
+    "Compare two types of transport. Which do you prefer and why?",
+    "Talk about a trip or holiday you took. Where did you go?",
+    "What job would you like to have in the future? Why?",
+    "Describe someone you admire. Why do you admire them?",
+    "What do you think about social media? Is it good or bad?",
+    "Talk about a film or TV series you watched recently.",
+    "Describe your best friend. What do you like about them?",
+    "What are your plans for this weekend? What are you going to do?",
+    "Compare two cities or countries. Which would you prefer to live in?",
+    "Describe a time when something funny or unusual happened to you.",
+  ],
+  B1: [
+    "Do you think technology makes our lives better or worse? Give reasons.",
+    "Talk about an important decision you made. What happened?",
+    "What are the advantages and disadvantages of living in a big city?",
+    "Should students learn a foreign language at school? Why/Why not?",
+    "How has your hometown changed in recent years?",
+    "Talk about an achievement you are proud of.",
+    "What would you do if you could live in another country?",
+    "Do you think people today have a good work-life balance?",
+    "Discuss the advantages and disadvantages of social media for young people.",
+    "Do you think climate change is the most serious problem facing the world today?",
+    "Talk about a book, film, or piece of music that influenced you. Why did it have an impact?",
+    "If you could change one thing about your education system, what would it be and why?",
+  ],
+}
+
+const LEVEL_COLORS: Record<string, string> = {
+  A1: '#22c55e',
+  A2: '#3b82f6',
+  B1: '#c8a96e',
+}
+
+type Level = 'A1' | 'A2' | 'B1'
+
+function QuestionCard({ question, level, onAskSanchez }: {
+  question: string
+  level: string
+  onAskSanchez: (q: string) => void
+}) {
+  const color = LEVEL_COLORS[level] ?? '#a0a0a0'
+  return (
+    <div
+      style={{
+        background: '#111111',
+        border: '1px solid #222222',
+        borderRadius: 12,
+        padding: '14px 16px',
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 14,
+      }}
+    >
+      <span style={{ fontSize: 16, marginTop: 1, flexShrink: 0 }}>🎤</span>
+      <div style={{ flex: 1 }}>
+        <p style={{ color: '#ffffff', fontSize: 13, lineHeight: 1.6, marginBottom: 10 }}>{question}</p>
+        <button
+          onClick={() => onAskSanchez(question)}
+          style={{
+            padding: '5px 12px',
+            background: color + '15',
+            border: `1px solid ${color}40`,
+            borderRadius: 6,
+            color,
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+          }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+          </svg>
+          Bu soruyu Sanchez'e sor
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export function SpeakingModule() {
-  const [isRecording, setIsRecording] = useState(false);
-  const [currentExercise, setCurrentExercise] = useState(0);
-  const [activeTab, setActiveTab] = useState("pronunciation");
-  const [selectedScenario, setSelectedScenario] = useState<number | null>(null);
-  const [selectedTopic, setSelectedTopic] = useState<number | null>(null);
-  const [currentDialogue, setCurrentDialogue] = useState(0);
-  const [practiceResults, setPracticeResults] = useState<{
-    [key: string]: "success" | "retry" | null;
-  }>({});
+  const router = useRouter()
+  const [activeLevel, setActiveLevel] = useState<Level>('A1')
 
-  const handleRecord = () => {
-    setIsRecording(!isRecording);
-    if (isRecording) {
-      // Simüle edilmiş kayıt sonucu
-      const random = Math.random() > 0.3;
-      setPracticeResults({
-        ...practiceResults,
-        [`${activeTab}-${currentExercise}`]: random ? "success" : "retry",
-      });
-    }
-  };
+  function handleAskSanchez(question: string) {
+    const prompt = encodeURIComponent(
+      `İngilizce konuşma pratiği yapmak istiyorum. Bana bu soruyu sor ve cevabımı düzelt:\n\n"${question}"\n\nBen cevap verdikten sonra gramerimi ve ifadelerimi düzelt.`
+    )
+    sessionStorage.setItem('reborn:mini-prompt', decodeURIComponent(prompt))
+    router.push('/')
+  }
 
-  const playAudio = () => {
-    // Text-to-speech API kullanılabilir
-    const utterance = new SpeechSynthesisUtterance(
-      speakingExercises[0].exercises?.[currentExercise]?.word || ""
-    );
-    utterance.lang = "en-US";
-    window.speechSynthesis.speak(utterance);
-  };
-
-  const pronunciation = speakingExercises.find((e) => e.type === "pronunciation");
-  const roleplay = speakingExercises.find((e) => e.type === "roleplay");
-  const presentation = speakingExercises.find((e) => e.type === "presentation");
-  const conversation = speakingExercises.find((e) => e.type === "conversation");
+  const levels: Level[] = ['A1', 'A2', 'B1']
+  const questions: string[] = SPEAKING_DATA[activeLevel]
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-foreground">Konuşma Pratiği</h1>
-          <p className="text-muted-foreground mt-1">
-            Telaffuz, rol yapma ve sunum becerileri
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right">
-            <p className="text-sm text-muted-foreground">Bugünkü Pratik</p>
-            <p className="text-2xl font-bold text-primary">12 dk</p>
-          </div>
-        </div>
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <h2 style={{ color: '#ffffff', fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Konuşma</h2>
+        <p style={{ color: '#a0a0a0', fontSize: 13 }}>
+          Soruları oku, cevabını düşün, ardından Sanchez ile pratik yap.
+        </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="pronunciation" className="gap-2">
-            <Volume2 className="h-4 w-4" />
-            Telaffuz
-          </TabsTrigger>
-          <TabsTrigger value="roleplay" className="gap-2">
-            <Users className="h-4 w-4" />
-            Rol Yapma
-          </TabsTrigger>
-          <TabsTrigger value="presentation" className="gap-2">
-            <Presentation className="h-4 w-4" />
-            Sunum
-          </TabsTrigger>
-          <TabsTrigger value="conversation" className="gap-2">
-            <MessageSquare className="h-4 w-4" />
-            Diyalog
-          </TabsTrigger>
-        </TabsList>
+      {/* Info banner */}
+      <div
+        style={{
+          background: 'rgba(200,169,110,0.06)',
+          border: '1px solid rgba(200,169,110,0.2)',
+          borderRadius: 12,
+          padding: '12px 16px',
+          marginBottom: 20,
+          display: 'flex',
+          gap: 10,
+          alignItems: 'flex-start',
+        }}
+      >
+        <span style={{ fontSize: 16, flexShrink: 0 }}>💡</span>
+        <p style={{ color: '#a0a0a0', fontSize: 12, lineHeight: 1.6 }}>
+          Her kartın altındaki <strong style={{ color: '#c8a96e' }}>Sanchez'e sor</strong> butonuna tıkla.
+          Sanchez sana o soruyu sorar, cevabını İngilizce yaz, o da gramerini düzeltir.
+        </p>
+      </div>
 
-        <TabsContent value="pronunciation" className="mt-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="border-border/50">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Kelime Telaffuzu</span>
-                  <Badge variant="outline">
-                    {currentExercise + 1} / {pronunciation?.exercises?.length}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {pronunciation?.exercises && (
-                  <>
-                    <div className="text-center p-8 bg-muted/30 rounded-xl">
-                      <p className="text-5xl font-bold text-foreground mb-2">
-                        {pronunciation.exercises[currentExercise].word}
-                      </p>
-                      <p className="text-2xl text-primary font-mono">
-                        {pronunciation.exercises[currentExercise].phonetic}
-                      </p>
-                      <p className="text-sm text-muted-foreground mt-4">
-                        💡 {pronunciation.exercises[currentExercise].turkishHint}
-                      </p>
-                      <Badge className="mt-2" variant="secondary">
-                        {pronunciation.exercises[currentExercise].difficulty}
-                      </Badge>
-                    </div>
+      {/* Level tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+        {levels.map((lv) => {
+          const isActive = activeLevel === lv
+          const color = LEVEL_COLORS[lv]
+          return (
+            <button
+              key={lv}
+              onClick={() => setActiveLevel(lv)}
+              style={{
+                padding: '6px 16px',
+                borderRadius: 8,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                border: `1px solid ${isActive ? color : '#222222'}`,
+                background: isActive ? color + '20' : 'transparent',
+                color: isActive ? color : '#a0a0a0',
+                transition: 'all 0.15s',
+              }}
+            >
+              {lv}
+            </button>
+          )
+        })}
+        {/* B2 locked */}
+        <button
+          disabled
+          style={{
+            padding: '6px 14px',
+            borderRadius: 8,
+            fontSize: 12,
+            fontWeight: 600,
+            cursor: 'default',
+            border: '1px solid #222222',
+            background: 'transparent',
+            color: '#333',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          B2 <span style={{ fontSize: 9 }}>Haziran</span>
+        </button>
 
-                    <div className="flex justify-center gap-4">
-                      <Button variant="outline" size="lg" onClick={playAudio}>
-                        <Volume2 className="h-5 w-5 mr-2" />
-                        Dinle
-                      </Button>
-                      <Button
-                        size="lg"
-                        variant={isRecording ? "destructive" : "default"}
-                        onClick={handleRecord}
-                        className="min-w-32"
-                      >
-                        {isRecording ? (
-                          <>
-                            <MicOff className="h-5 w-5 mr-2" />
-                            Durdur
-                          </>
-                        ) : (
-                          <>
-                            <Mic className="h-5 w-5 mr-2" />
-                            Kaydet
-                          </>
-                        )}
-                      </Button>
-                    </div>
+        {/* Question count */}
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#555', alignSelf: 'center' }}>
+          {questions.length} soru
+        </span>
+      </div>
 
-                    {practiceResults[`pronunciation-${currentExercise}`] && (
-                      <div
-                        className={`p-4 rounded-lg text-center ${
-                          practiceResults[`pronunciation-${currentExercise}`] ===
-                          "success"
-                            ? "bg-green-500/10 text-green-500"
-                            : "bg-orange-500/10 text-orange-500"
-                        }`}
-                      >
-                        {practiceResults[`pronunciation-${currentExercise}`] ===
-                        "success" ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <CheckCircle2 className="h-5 w-5" />
-                            Harika! Telaffuzun çok iyi.
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-center gap-2">
-                            <XCircle className="h-5 w-5" />
-                            Tekrar dene! Biraz daha pratik yap.
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="flex justify-between">
-                      <Button
-                        variant="outline"
-                        onClick={() => setCurrentExercise(Math.max(0, currentExercise - 1))}
-                        disabled={currentExercise === 0}
-                      >
-                        Önceki
-                      </Button>
-                      <Button
-                        onClick={() =>
-                          setCurrentExercise(
-                            Math.min(
-                              pronunciation.exercises!.length - 1,
-                              currentExercise + 1
-                            )
-                          )
-                        }
-                        disabled={
-                          currentExercise === pronunciation.exercises!.length - 1
-                        }
-                      >
-                        Sonraki
-                        <ArrowRight className="h-4 w-4 ml-2" />
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="border-border/50">
-              <CardHeader>
-                <CardTitle>Telaffuz İpuçları</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="p-4 bg-muted/30 rounded-lg">
-                  <h4 className="font-semibold mb-2">TH Sesi (/θ/ ve /ð/)</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Dilinizi üst dişlerinizin arasına koyun ve hafifçe üfleyin.
-                    Türkçede bu ses yoktur.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Badge variant="outline">think</Badge>
-                    <Badge variant="outline">the</Badge>
-                    <Badge variant="outline">through</Badge>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-muted/30 rounded-lg">
-                  <h4 className="font-semibold mb-2">R Sesi</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Amerikan İngilizcesinde R sesi dilinizi geriye doğru
-                    kıvırarak yapılır. İngiliz İngilizcesinde daha yumuşaktır.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Badge variant="outline">red</Badge>
-                    <Badge variant="outline">right</Badge>
-                    <Badge variant="outline">car</Badge>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-muted/30 rounded-lg">
-                  <h4 className="font-semibold mb-2">Vurgulu Heceler</h4>
-                  <p className="text-sm text-muted-foreground">
-                    İngilizcede her kelimenin vurgulu bir hecesi vardır. Yanlış
-                    vurgu anlaşılmayı zorlaştırır.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Badge variant="outline">PHO-to-graph</Badge>
-                    <Badge variant="outline">pho-TO-gra-pher</Badge>
-                    <Badge variant="outline">pho-to-GRA-phic</Badge>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="roleplay" className="mt-6">
-          <div className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-1 space-y-4">
-              <h3 className="font-semibold text-lg">Senaryolar</h3>
-              {roleplay?.scenarios?.map((scenario) => (
-                <Card
-                  key={scenario.id}
-                  className={`cursor-pointer transition-all hover:border-primary/50 ${
-                    selectedScenario === scenario.id ? "border-primary bg-primary/5" : ""
-                  }`}
-                  onClick={() => setSelectedScenario(scenario.id)}
-                >
-                  <CardContent className="p-4">
-                    <h4 className="font-semibold">{scenario.title}</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {scenario.description}
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <div className="lg:col-span-2">
-              {selectedScenario ? (
-                <Card className="border-border/50">
-                  <CardHeader>
-                    <CardTitle>
-                      {roleplay?.scenarios?.find((s) => s.id === selectedScenario)?.title}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    {roleplay?.scenarios
-                      ?.find((s) => s.id === selectedScenario)
-                      ?.prompts.map((prompt, idx) => (
-                        <div
-                          key={idx}
-                          className={`p-4 rounded-lg ${
-                            prompt.startsWith("Sen:")
-                              ? "bg-primary/10 border-l-4 border-primary ml-8"
-                              : "bg-muted/30 mr-8"
-                          }`}
-                        >
-                          <p className="text-sm">{prompt}</p>
-                          {prompt.startsWith("Sen:") && (
-                            <div className="mt-3 flex gap-2">
-                              <Button size="sm" variant="outline">
-                                <Mic className="h-4 w-4 mr-1" />
-                                Kaydet
-                              </Button>
-                              <Button size="sm" variant="ghost">
-                                İpucu
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-
-                    <div className="p-4 bg-muted/30 rounded-lg mt-6">
-                      <h4 className="font-semibold mb-2">Önerilen Yanıtlar</h4>
-                      <ul className="space-y-2">
-                        {roleplay?.scenarios
-                          ?.find((s) => s.id === selectedScenario)
-                          ?.suggestedResponses.map((response, idx) => (
-                            <li key={idx} className="text-sm text-muted-foreground">
-                              • {response}
-                            </li>
-                          ))}
-                      </ul>
-                    </div>
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card className="border-border/50 border-dashed">
-                  <CardContent className="p-12 text-center">
-                    <Users className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">
-                      Pratik yapmak için bir senaryo seçin
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="presentation" className="mt-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            {presentation?.topics?.map((topic) => (
-              <Card
-                key={topic.id}
-                className={`cursor-pointer transition-all hover:border-primary/50 ${
-                  selectedTopic === topic.id ? "border-primary" : ""
-                }`}
-                onClick={() => setSelectedTopic(topic.id)}
-              >
-                <CardHeader>
-                  <CardTitle className="flex items-center justify-between">
-                    <span>{topic.title}</span>
-                    <Badge variant="outline">{topic.duration}</Badge>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <h4 className="font-semibold text-sm mb-2">Konuşma Noktaları:</h4>
-                    <ul className="space-y-1">
-                      {topic.points.map((point, idx) => (
-                        <li key={idx} className="text-sm text-muted-foreground flex items-center gap-2">
-                          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                          {point}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold text-sm mb-2">İpuçları:</h4>
-                    <ul className="space-y-1">
-                      {topic.tips.map((tip, idx) => (
-                        <li key={idx} className="text-sm text-muted-foreground">
-                          💡 {tip}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="flex gap-2 pt-4">
-                    <Button className="flex-1">
-                      <Mic className="h-4 w-4 mr-2" />
-                      Sunuma Başla
-                    </Button>
-                    <Button variant="outline">
-                      <RotateCcw className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="conversation" className="mt-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Diyaloglar</h3>
-              {conversation?.dialogues?.map((dialogue, idx) => (
-                <Card
-                  key={dialogue.id}
-                  className={`cursor-pointer transition-all hover:border-primary/50 ${
-                    currentDialogue === idx ? "border-primary bg-primary/5" : ""
-                  }`}
-                  onClick={() => setCurrentDialogue(idx)}
-                >
-                  <CardContent className="p-4">
-                    <h4 className="font-semibold">{dialogue.title}</h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {dialogue.lines.length} satır diyalog
-                    </p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-
-            <Card className="border-border/50">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>{conversation?.dialogues?.[currentDialogue]?.title}</span>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline">
-                      <Play className="h-4 w-4 mr-1" />
-                      Tümünü Dinle
-                    </Button>
-                  </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {conversation?.dialogues?.[currentDialogue]?.lines.map((line, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-3 rounded-lg flex items-start gap-3 ${
-                      line.speaker === "B"
-                        ? "bg-primary/10 ml-8"
-                        : "bg-muted/30 mr-8"
-                    }`}
-                  >
-                    <Badge variant={line.speaker === "B" ? "default" : "secondary"}>
-                      {line.speaker}
-                    </Badge>
-                    <div className="flex-1">
-                      <p className="text-sm">{line.text}</p>
-                    </div>
-                    <Button size="sm" variant="ghost" className="h-8 w-8 p-0">
-                      <Volume2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-
-                <div className="pt-4 flex gap-2">
-                  <Button className="flex-1">
-                    <Mic className="h-4 w-4 mr-2" />B Rolünü Oyna
-                  </Button>
-                  <Button variant="outline" className="flex-1">
-                    <Users className="h-4 w-4 mr-2" />A Rolünü Oyna
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-      </Tabs>
+      {/* Questions */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {questions.map((q: string, i: number) => (
+          <QuestionCard
+            key={i}
+            question={q}
+            level={activeLevel}
+            onAskSanchez={handleAskSanchez}
+          />
+        ))}
+      </div>
     </div>
-  );
+  )
 }

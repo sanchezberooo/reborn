@@ -289,6 +289,105 @@ export function LevelTabsLayout({ moduleKey, content }: Props) {
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
+// ─── rich word list ───────────────────────────────────────────────────────────
+
+export interface RichWord {
+  en: string
+  tr: string
+  example?: string
+  irregular?: string
+}
+
+export function RichWordList({ words }: { words: RichWord[] }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {words.map((w) => (
+        <div
+          key={w.en}
+          style={{
+            padding: '8px 12px',
+            background: '#0d0d0d',
+            border: '1px solid #1e1e1e',
+            borderRadius: 8,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ color: '#ffffff', fontSize: 13, fontWeight: 600 }}>{w.en}</span>
+            <span style={{ color: '#a0a0a0', fontSize: 12 }}>— {w.tr}</span>
+            {w.irregular && (
+              <span style={{ color: '#c8a96e', fontSize: 10, marginLeft: 'auto', fontFamily: 'monospace' }}>
+                {w.irregular}
+              </span>
+            )}
+          </div>
+          {w.example && (
+            <p style={{ color: '#666', fontSize: 11, lineHeight: 1.5, fontStyle: 'italic', marginTop: 3 }}>
+              {w.example}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── full grammar box ─────────────────────────────────────────────────────────
+
+export function FullGrammarBox({
+  descTR, formula, examples, exercises, errors,
+}: {
+  descTR: string
+  formula: string
+  examples: string[]
+  exercises?: string[]
+  errors?: { wrong: string; correct: string }[]
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ background: 'rgba(200,169,110,0.06)', border: '1px solid rgba(200,169,110,0.2)', borderRadius: 8, padding: '9px 12px' }}>
+        <p style={{ fontSize: 10, color: '#c8a96e', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Türkçe Açıklama</p>
+        <p style={{ color: '#d0d0d0', fontSize: 13, lineHeight: 1.6 }}>{descTR}</p>
+      </div>
+      <div style={{ background: '#0d0d0d', border: '1px solid #1e1e1e', borderRadius: 8, padding: '8px 12px' }}>
+        <p style={{ fontSize: 10, color: '#a0a0a0', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Formül</p>
+        <p style={{ color: '#c8a96e', fontSize: 13, fontWeight: 600, fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>{formula}</p>
+      </div>
+      <div>
+        <p style={{ fontSize: 10, color: '#a0a0a0', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Örnekler</p>
+        {examples.map((ex, i) => (
+          <p key={i} style={{ color: '#ffffff', fontSize: 13, lineHeight: 1.7, marginBottom: 3 }}>
+            <span style={{ color: '#555', marginRight: 6 }}>›</span>{ex}
+          </p>
+        ))}
+      </div>
+      {exercises && exercises.length > 0 && (
+        <div style={{ background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 8, padding: '10px 12px' }}>
+          <p style={{ fontSize: 10, color: '#3b82f6', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Pratik Yap</p>
+          {exercises.map((ex, i) => (
+            <p key={i} style={{ color: '#d0d0d0', fontSize: 13, lineHeight: 1.7, marginBottom: 3 }}>
+              <span style={{ color: '#3b82f6', marginRight: 6, fontWeight: 700 }}>{i + 1}.</span>{ex}
+            </p>
+          ))}
+        </div>
+      )}
+      {errors && errors.length > 0 && (
+        <div style={{ background: 'rgba(239,68,68,0.04)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '10px 12px' }}>
+          <p style={{ fontSize: 10, color: '#ef4444', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Yaygın Hatalar</p>
+          {errors.map((err, i) => (
+            <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
+              <span style={{ color: '#ef4444', fontSize: 12, textDecoration: 'line-through' }}>{err.wrong}</span>
+              <span style={{ color: '#444' }}>→</span>
+              <span style={{ color: '#22c55e', fontSize: 12 }}>{err.correct}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── word list (simple) ───────────────────────────────────────────────────────
+
 export function WordList({ words }: { words: { en: string; tr: string }[] }) {
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>

@@ -7,12 +7,7 @@ import MiniChat from './chat/MiniChat'
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const isAuthPage = pathname === '/login' || pathname.startsWith('/auth')
   const isSanchezPage = pathname === '/'
-
-  if (isAuthPage) {
-    return <>{children}</>
-  }
 
   return (
     <div className="flex flex-col h-full">
