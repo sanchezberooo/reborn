@@ -11,6 +11,8 @@ import { ListeningModule } from './components/listening-module'
 import { WritingModule } from './components/writing-module'
 import { SpeakingModule } from './components/speaking-module'
 import { QuizModule } from './components/quiz-module'
+import { PlanModule } from './components/plan-module'
+import type { WeekPlan } from './components/plan-module'
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import { dbLoadModules, dbExecuteAction } from '@/lib/db'
 import type { ModuleType } from './lib/types'
@@ -43,6 +45,7 @@ function todayISO() {
 export default function IngilizceePage() {
   const [activeModule, setActiveModule] = useState<ActiveView>('dashboard')
   const [progress, setProgress] = useState<EnglishProgress>(DEFAULT_PROGRESS)
+  const [weeklyPlans, setWeeklyPlans] = useState<Record<string, WeekPlan>>({})
   const [loaded, setLoaded] = useState(false)
 
   // Load progress from Supabase
@@ -51,6 +54,8 @@ export default function IngilizceePage() {
       const englishMod = mods.find((m) => m.id === 'english')
       if (englishMod?.data) {
         const d = englishMod.data as Record<string, unknown>
+        const storedPlans = d.weeklyPlans as Record<string, WeekPlan> | undefined
+        if (storedPlans) setWeeklyPlans(storedPlans)
         const stored = d.progress as Partial<EnglishProgress> | undefined
         if (stored) {
           // Check streak continuity
@@ -110,6 +115,13 @@ export default function IngilizceePage() {
       case 'writing':    return <WritingModule />
       case 'speaking':   return <SpeakingModule />
       case 'quiz':       return <QuizModule />
+      case 'plan':       return (
+        <PlanModule
+          weeklyPlans={weeklyPlans}
+          onPlanUpdated={setWeeklyPlans}
+          onNavigate={(mod) => handleModuleChange(mod)}
+        />
+      )
       default:           return <Dashboard onModuleChange={handleModuleChange} />
     }
   }

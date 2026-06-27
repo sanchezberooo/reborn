@@ -192,7 +192,7 @@ export interface QuizQuestion {
 }
 
 // Modül kategorileri
-export type ModuleType = 'vocabulary' | 'grammar' | 'idioms' | 'patterns' | 'reading' | 'listening' | 'writing' | 'speaking' | 'quiz'
+export type ModuleType = 'vocabulary' | 'grammar' | 'idioms' | 'patterns' | 'reading' | 'listening' | 'writing' | 'speaking' | 'quiz' | 'plan'
 
 export interface Module {
   id: ModuleType

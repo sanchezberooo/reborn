@@ -62,7 +62,7 @@ export async function POST(req: Request) {
         system: agent.persona,
         messages,
         ...(filteredTools ? { tools: filteredTools } : {}),
-        max_tokens: 2048,
+        max_tokens: agent.maxTokens ?? 2048,
       })
 
       for (const block of response.content) {
@@ -96,12 +96,22 @@ export async function POST(req: Request) {
       }
     }
 
-    const stripped = finalText.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim()
+    // Strip markdown fences, then extract the outermost JSON object.
+    const debracketed = finalText
+      .replace(/^```(?:json)?\s*\n?/, '')
+      .replace(/\n?```\s*$/, '')
+      .trim()
+    const firstBrace = debracketed.indexOf('{')
+    const lastBrace  = debracketed.lastIndexOf('}')
+    const candidate  = firstBrace !== -1 && lastBrace > firstBrace
+      ? debracketed.slice(firstBrace, lastBrace + 1)
+      : debracketed
+
     let output: unknown
     try {
-      output = JSON.parse(stripped)
+      output = JSON.parse(candidate)
     } catch {
-      output = { raw: finalText }
+      output = { parseError: true, raw: finalText }
     }
 
     await supabase.from('agent_runs').update({

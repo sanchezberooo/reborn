@@ -1,13 +1,13 @@
 'use client'
 
-import { 
-  BookOpen, 
-  FileText, 
-  MessageSquare, 
-  Layers, 
-  BookText, 
-  Headphones, 
-  PenTool, 
+import {
+  BookOpen,
+  FileText,
+  MessageSquare,
+  Layers,
+  BookText,
+  Headphones,
+  PenTool,
   Mic,
   LayoutDashboard,
   Trophy,
@@ -15,7 +15,8 @@ import {
   HelpCircle,
   Flame,
   Zap,
-  GraduationCap
+  GraduationCap,
+  CalendarDays,
 } from 'lucide-react'
 import type { ModuleType } from '../lib/types'
 import {
@@ -50,6 +51,7 @@ const moduleIcons = {
   listening: Headphones,
   writing: PenTool,
   speaking: Mic,
+  plan: CalendarDays,
 }
 
 const modules = [
@@ -61,6 +63,7 @@ const modules = [
   { id: 'listening' as const, label: 'Dinleme', labelEn: 'Listening', level: 'A1-C2' },
   { id: 'writing' as const, label: 'Yazma', labelEn: 'Writing', level: 'A2-C2' },
   { id: 'speaking' as const, label: 'Konusma', labelEn: 'Speaking', level: 'A1-C2' },
+  { id: 'plan' as const, label: 'Ders Planı', labelEn: 'Study Plan', level: '' },
 ]
 
 export function AppSidebar({ activeModule, onModuleChange, streak, xp }: AppSidebarProps) {

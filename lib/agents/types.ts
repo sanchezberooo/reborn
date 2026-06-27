@@ -5,4 +5,5 @@ export interface AgentDefinition {
   toolNames: string[]
   moduleTarget: string | null
   outputContract: string
+  maxTokens?: number
 }
