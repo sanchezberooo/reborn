@@ -84,6 +84,28 @@ Planlama kuralları:
 ÇIKTI: outputContract şemasına BİREBİR uyan SADECE JSON. Markdown yok, \`\`\` yok, açıklama yok. İçerik Türkçe.`,
   },
 
+  // ── Research / discovery agent ───────────────────────────────────────────
+  'kesif-arastirmaci': {
+    name: 'kesif-arastirmaci',
+    displayName: 'Keşif Araştırmacı',
+    moduleTarget: null,
+    toolNames: [],
+    webSearch: true,
+    maxTokens: 8192,
+    outputContract: JSON.stringify({
+      topic: 'string',
+      summary: 'string',
+      keyFindings: [{ point: 'string', detail: 'string', source: 'string' }],
+      sources: [{ title: 'string', url: 'string', note: 'string' }],
+      openQuestions: ['string'],
+    }),
+    persona: `Sen derinlemesine araştırma yapan bir uzmansın. Verilen konuyu web araması yaparak araştırırsın: güncel, gerçek, kaynaklı bilgi toplarsın. Reddit, forumlar, haber siteleri, resmi kaynaklar — neyi bulursan değerlendir. Her bulguyu bir kaynağa bağla, uydurma. Çelişkili bilgi varsa belirt. İçerik Türkçe, kaynak başlık/url'leri orijinal dilinde.
+
+ÇOK ÖNEMLİ ÇIKTI KURALI: Web aramasını TAMAMLADIKTAN sonra, bulgularını SADECE geçerli bir JSON nesnesi olarak döndür. Markdown KULLANMA — ###, **, -, link formatı [x](y), emoji YOK. Cevabın ilk karakteri { olmalı, son karakteri } olmalı. Tüm metin, başlıklar, kaynaklar bu JSON şemasının alanlarının içinde yer almalı:
+{ topic, summary, keyFindings:[{point,detail,source}], sources:[{title,url,note}], openQuestions:[] }
+Linkleri sources dizisindeki url alanına koy. Açıklamaları string olarak yaz. JSON DIŞINDA tek bir karakter bile yazma.`,
+  },
+
   // ── Smoke-test agent ──────────────────────────────────────────────────────
   'test-agent': {
     name: 'test-agent',

@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import { anthropic, CLAUDE_MODEL, TOOLS } from '@/lib/anthropic'
+import { anthropic, CLAUDE_MODEL, TOOLS, WEB_SEARCH_TOOL } from '@/lib/anthropic'
 import { getAgent } from '@/lib/agents/registry'
 import { serverExecuteTool } from '@/lib/agents/executor'
 
@@ -46,9 +46,20 @@ export async function POST(req: Request) {
   const runId = runRow.id as string
 
   try {
-    const filteredTools = agent.toolNames.length > 0
+    const customTools = agent.toolNames.length > 0
       ? TOOLS.filter((t) => agent.toolNames.includes(t.name)) as Anthropic.Messages.Tool[]
-      : undefined
+      : []
+
+    const useWebSearch = Boolean(agent.webSearch)
+    const toolsForCall: Anthropic.Messages.Tool[] = useWebSearch
+      ? [...customTools, WEB_SEARCH_TOOL]
+      : customTools
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const apiCreate: (p: Record<string, unknown>) => Promise<any> = useWebSearch
+      ? (p) => (anthropic.beta.messages as unknown as { create: (p: Record<string, unknown>) => Promise<unknown> })
+          .create({ ...p, betas: ['web-search-2025-03-05'] })
+      : (p) => anthropic.messages.create(p as unknown as Anthropic.MessageCreateParamsNonStreaming)
 
     const messages: MessageParam[] = [
       { role: 'user', content: JSON.stringify(input) },
@@ -57,26 +68,26 @@ export async function POST(req: Request) {
     let finalText = ''
 
     while (true) {
-      const response = await anthropic.messages.create({
+      const response = await apiCreate({
         model: CLAUDE_MODEL,
         system: agent.persona,
         messages,
-        ...(filteredTools ? { tools: filteredTools } : {}),
+        ...(toolsForCall.length > 0 ? { tools: toolsForCall } : {}),
         max_tokens: agent.maxTokens ?? 2048,
       })
 
-      for (const block of response.content) {
-        if (block.type === 'text') finalText = block.text
+      for (const block of response.content as { type: string; text?: string }[]) {
+        if (block.type === 'text') finalText += block.text ?? ''
       }
 
       if (response.stop_reason === 'end_turn' || response.stop_reason === 'max_tokens') break
 
       if (response.stop_reason === 'tool_use') {
-        const toolUses = response.content.filter(
+        const toolUses = (response.content as { type: string }[]).filter(
           (b): b is ToolUseBlock => b.type === 'tool_use'
         )
 
-        messages.push({ role: 'assistant', content: response.content })
+        messages.push({ role: 'assistant', content: response.content as MessageParam['content'] })
 
         const toolResults: ToolResultBlockParam[] = await Promise.all(
           toolUses.map(async (tu) => {
@@ -92,7 +103,12 @@ export async function POST(req: Request) {
           })
         )
 
-        messages.push({ role: 'user', content: toolResults })
+        if (toolResults.length > 0) {
+          messages.push({ role: 'user', content: toolResults })
+        } else {
+          // No client-side tools to resolve (e.g. only server-side web_search) — break to avoid infinite loop
+          break
+        }
       }
     }
 
@@ -111,7 +127,7 @@ export async function POST(req: Request) {
     try {
       output = JSON.parse(candidate)
     } catch {
-      output = { parseError: true, raw: finalText }
+      output = { parseError: true, rawLength: finalText.length, raw: finalText }
     }
 
     await supabase.from('agent_runs').update({

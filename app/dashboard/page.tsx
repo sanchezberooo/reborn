@@ -255,9 +255,47 @@ function AgentCard() {
     <Card href="/agent-panel" color="#c8a96e" icon="🤖" title="Agent Panel">
       <div className="flex items-center gap-2">
         <span className="w-2 h-2 rounded-full bg-muted/40" />
-        <span className="text-sm font-medium text-muted/70">7 agent hazır</span>
+        <span className="text-sm font-medium text-muted/70">Agent hazır</span>
       </div>
       <p className="text-[11px] text-muted/40">Agent ofisini aç →</p>
+    </Card>
+  )
+}
+
+function BursAkademiCard({ mod }: { mod: ModuleItem | null }) {
+  const schools = (mod?.data?.schools as Array<{ status: string; name: string }>) ?? []
+  const hedef   = schools.filter((s) => s.status === 'hedef').length
+  const basv    = schools.filter((s) => s.status === 'basvuruldu').length
+
+  return (
+    <Card href="/burs-akademisi" color="#c8a96e" icon="🎓" title="Burs Akademisi">
+      {schools.length > 0 ? (
+        <>
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-lg font-semibold text-foreground">{schools.length}</span>
+            <span className="text-xs text-muted">okul takipte</span>
+          </div>
+          <div className="flex flex-col gap-0.5">
+            {hedef > 0 && (
+              <p className="text-[11px]">
+                <span className="text-gold font-medium">{hedef}</span>
+                <span className="text-muted/50"> hedef okul</span>
+              </p>
+            )}
+            {basv > 0 && (
+              <p className="text-[11px]">
+                <span className="text-sky-400 font-medium">{basv}</span>
+                <span className="text-muted/50"> başvuruldu</span>
+              </p>
+            )}
+            {hedef === 0 && basv === 0 && (
+              <p className="text-[11px] text-muted/40">Henüz hedef belirlenmedi</p>
+            )}
+          </div>
+        </>
+      ) : (
+        <p className="text-[11px] text-muted/40 italic">Okul listesini aç →</p>
+      )}
     </Card>
   )
 }
@@ -317,9 +355,10 @@ export default function DashboardPage() {
           <BedenCard      mod={mod('body')} />
           <IeltsCard      mod={mod('english')} />
           <RoadmapCard    mod={mod('roadmap')} />
-          <KesifCard      mod={mod('discover')} />
+          <KesifCard          mod={mod('discover')} />
           <AgentCard />
-          <ArsivCard      mod={mod('daily')} />
+          <BursAkademiCard    mod={mod('burs-akademisi')} />
+          <ArsivCard          mod={mod('daily')} />
         </div>
 
       </div>

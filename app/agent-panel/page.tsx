@@ -695,12 +695,281 @@ function OfficeTab({ onModal, onDetail }: {
   )
 }
 
+// ─── runner tab ──────────────────────────────────────────────────────────────
+
+interface AgentMeta { name: string; displayName: string; moduleTarget: string | null }
+interface AgentRun {
+  id: string; agent_name: string; status: string
+  input: unknown; output: unknown
+  module_target: string | null; error: string | null
+  started_at: string; finished_at: string | null
+}
+interface AgentLog { id: string; action: string; result: string; created_at: string }
+
+const RUNNER_ACCENT = '#c8a96e'
+
+const MONTHS_TR_R = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık']
+const WEEK1_R = new Date('2026-06-29T00:00:00')
+const PHASE_TITLES_R: Record<number, string> = {
+  1: 'Faz 1: Temel Sağlamlaştırma (A1→A2)', 2: 'Faz 1: Temel Sağlamlaştırma (A1→A2)',
+  3: 'Faz 2: Yapı ve Üretim (A2)',           4: 'Faz 2: Yapı ve Üretim (A2)',
+  5: 'Faz 3: Akıcılık Geliştirme (A2→B1)',  6: 'Faz 3: Akıcılık Geliştirme (A2→B1)',
+  7: 'Faz 4: IELTS Tekniği (B1)',            8: 'Faz 4: IELTS Tekniği (B1)',
+  9: 'Faz 5: Tam Bant Pratik (B1→B2)',      10: 'Faz 5: Tam Bant Pratik (B1→B2)',
+}
+
+function rWeekDates(wn: number): string {
+  const s = new Date(WEEK1_R); s.setDate(s.getDate() + (wn - 1) * 7)
+  const e = new Date(s);       e.setDate(e.getDate() + 5)
+  return `${s.getDate()} ${MONTHS_TR_R[s.getMonth()]} - ${e.getDate()} ${MONTHS_TR_R[e.getMonth()]}`
+}
+
+function rPhaseTitle(wn: number): string { return PHASE_TITLES_R[wn] ?? `Hafta ${wn}` }
+
+function fmtTs(iso: string) {
+  const d = new Date(iso)
+  return d.toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
+function RunBadge({ status }: { status: string }) {
+  const c = ({
+    running: { label: 'Çalışıyor', dot: 'bg-amber-400 animate-pulse', text: 'text-amber-400',  bg: 'bg-amber-400/10'   },
+    done:    { label: 'Tamam',     dot: 'bg-emerald-400',              text: 'text-emerald-400', bg: 'bg-emerald-400/10' },
+    error:   { label: 'Hata',      dot: 'bg-red-400',                  text: 'text-red-400',     bg: 'bg-red-400/10'     },
+  } as Record<string, { label:string; dot:string; text:string; bg:string }>)[status]
+    ?? { label: status, dot: 'bg-gray-400', text: 'text-gray-400', bg: 'bg-gray-400/10' }
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[9px] font-semibold tracking-wide ${c.text} ${c.bg}`}>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot}`} />
+      {c.label}
+    </span>
+  )
+}
+
+function RunnerTab() {
+  const [agents,     setAgents]     = useState<AgentMeta[]>([])
+  const [latest,     setLatest]     = useState<Record<string, AgentRun>>({})
+  const [view,       setView]       = useState<'list' | 'runs' | 'detail'>('list')
+  const [selAgent,   setSelAgent]   = useState('')
+  const [agentRuns,  setAgentRuns]  = useState<AgentRun[]>([])
+  const [selRun,     setSelRun]     = useState<AgentRun | null>(null)
+  const [runLogs,    setRunLogs]    = useState<AgentLog[]>([])
+  const [running,    setRunning]    = useState(false)
+  const [weekNum,    setWeekNum]    = useState(1)
+  const [loadRuns,   setLoadRuns]   = useState(false)
+  const [loadLogs,   setLoadLogs]   = useState(false)
+
+  const loadAgents = async () => {
+    const res  = await fetch('/api/agents/list')
+    const list: AgentMeta[] = await res.json()
+    setAgents(list)
+    await Promise.all(list.map(async (a) => {
+      const r = await fetch(`/api/agents/runs?agent=${a.name}`)
+      const runs: AgentRun[] = await r.json()
+      if (runs.length > 0) setLatest((p) => ({ ...p, [a.name]: runs[0] }))
+    }))
+  }
+
+  useEffect(() => { loadAgents() }, [])
+
+  const openAgent = async (name: string) => {
+    setSelAgent(name); setView('runs'); setLoadRuns(true)
+    const r = await fetch(`/api/agents/runs?agent=${name}`)
+    setAgentRuns(await r.json())
+    setLoadRuns(false)
+  }
+
+  const openRun = async (run: AgentRun) => {
+    setSelRun(run); setView('detail'); setLoadLogs(true)
+    const r = await fetch(`/api/agents/logs?run_id=${run.id}`)
+    setRunLogs(await r.json())
+    setLoadLogs(false)
+  }
+
+  const buildInput = (name: string): Record<string, unknown> => {
+    const base = {
+      startLevel: 'A1', comprehension: 'strong', production: 'weak',
+      biggestFear: 'writing', target: 'IELTS 6.0 (stretch 7.0)',
+      examDate: '2026-09-05', hoursPerDay: '4-5', daysPerWeek: 6, restDay: 'Sunday',
+    }
+    if (name === 'ingilizce-planlayici') return {
+      ...base, weekNumber: weekNum, weekDates: rWeekDates(weekNum),
+      phaseTitle: rPhaseTitle(weekNum), previousWeekSummary: '',
+    }
+    if (name === 'ingilizce-genel-plan') return { ...base, startDate: '2026-06-29' }
+    return { message: 'ping' }
+  }
+
+  const runAgent = async (name: string) => {
+    setRunning(true)
+    try {
+      await fetch('/api/agents/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentName: name, input: buildInput(name) }),
+      })
+      if (view === 'runs' && selAgent === name) {
+        const r = await fetch(`/api/agents/runs?agent=${name}`)
+        const runs: AgentRun[] = await r.json()
+        setAgentRuns(runs)
+        if (runs.length > 0) setLatest((p) => ({ ...p, [name]: runs[0] }))
+      } else {
+        await loadAgents()
+      }
+    } finally { setRunning(false) }
+  }
+
+  const agentMeta = agents.find((a) => a.name === selAgent)
+
+  if (view === 'list') return (
+    <div className="flex flex-col gap-4">
+      <p className="text-xs text-muted/40">Registry'den yüklendi — {agents.length} agent · canlı çalıştırma &amp; geçmiş.</p>
+      {agents.length === 0 && <div className="py-12 text-center text-sm text-muted/30">Yükleniyor…</div>}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {agents.map((a) => {
+          const lat = latest[a.name]
+          return (
+            <div key={a.name}
+              className="bg-surface border border-border rounded-2xl p-4 hover:border-border/60 transition-colors cursor-pointer flex flex-col gap-2"
+              style={{ borderTopColor: RUNNER_ACCENT, borderTopWidth: '2px' }}
+              onClick={() => openAgent(a.name)}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-semibold text-foreground leading-snug">{a.displayName}</p>
+                {lat ? <RunBadge status={lat.status} /> : (
+                  <span className="text-[9px] text-muted/30 mt-1">Hiç çalışmadı</span>
+                )}
+              </div>
+              <p className="text-[10px] text-muted/40 font-mono">{a.name}</p>
+              {lat && <p className="text-[10px] text-muted/30">{fmtTs(lat.started_at)}</p>}
+              <div className="flex items-center gap-2 mt-1" onClick={(e) => e.stopPropagation()}>
+                {a.name === 'ingilizce-planlayici' && (
+                  <input type="number" min={1} max={10} value={weekNum}
+                    onChange={(e) => setWeekNum(Number(e.target.value))}
+                    className="w-14 bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground text-center focus:outline-none focus:border-gold/40"
+                    title="Hafta numarası" />
+                )}
+                <button
+                  onClick={() => runAgent(a.name)} disabled={running}
+                  className="flex-1 py-2 rounded-xl text-xs font-semibold text-background transition-opacity hover:opacity-80 disabled:opacity-40"
+                  style={{ background: RUNNER_ACCENT }}
+                >
+                  {running ? '⏳ Çalışıyor…' : 'Çalıştır'}
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+
+  if (view === 'runs') return (
+    <div>
+      <button onClick={() => setView('list')}
+        className="text-xs text-muted hover:text-foreground mb-4 transition-colors block">
+        ← Geri
+      </button>
+      <div className="flex items-center justify-between mb-4 gap-3">
+        <div>
+          <p className="text-base font-semibold text-foreground">{agentMeta?.displayName ?? selAgent}</p>
+          <p className="text-[10px] text-muted/40 font-mono mt-0.5">{selAgent}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {selAgent === 'ingilizce-planlayici' && (
+            <input type="number" min={1} max={10} value={weekNum}
+              onChange={(e) => setWeekNum(Number(e.target.value))}
+              className="w-14 bg-background border border-border rounded-lg px-2 py-1.5 text-xs text-foreground text-center focus:outline-none focus:border-gold/40"
+              title="Hafta numarası" />
+          )}
+          <button onClick={() => runAgent(selAgent)} disabled={running}
+            className="px-4 py-2 rounded-xl text-xs font-semibold text-background transition-opacity hover:opacity-80 disabled:opacity-40"
+            style={{ background: RUNNER_ACCENT }}>
+            {running ? '⏳ Çalışıyor…' : 'Çalıştır'}
+          </button>
+        </div>
+      </div>
+      {loadRuns && <div className="py-8 text-center text-sm text-muted/30">Yükleniyor…</div>}
+      {!loadRuns && agentRuns.length === 0 && (
+        <div className="py-12 text-center text-sm text-muted/30">Henüz çalıştırma yok.</div>
+      )}
+      <div className="flex flex-col gap-2">
+        {agentRuns.map((run) => (
+          <div key={run.id}
+            className="flex items-center gap-3 px-4 py-3 bg-surface border border-border rounded-xl hover:border-border/60 transition-colors cursor-pointer"
+            onClick={() => openRun(run)}
+          >
+            <RunBadge status={run.status} />
+            <span className="text-[10px] text-muted/50 font-mono flex-1 truncate">{run.id}</span>
+            <span className="text-[10px] text-muted/30 shrink-0">{fmtTs(run.started_at)}</span>
+            <span className="text-[9px] shrink-0" style={{ color: RUNNER_ACCENT + '99' }}>Detay →</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+
+  return (
+    <div>
+      <button onClick={() => setView('runs')}
+        className="text-xs text-muted hover:text-foreground mb-4 transition-colors block">
+        ← Çalıştırmalara dön
+      </button>
+      {selRun && (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <RunBadge status={selRun.status} />
+            <span className="text-[10px] text-muted/40 font-mono">{selRun.id}</span>
+            <span className="text-[10px] text-muted/30">{fmtTs(selRun.started_at)}</span>
+          </div>
+          {selRun.error && (
+            <div className="p-3 rounded-xl text-xs text-red-400"
+              style={{ background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)' }}>
+              {selRun.error}
+            </div>
+          )}
+          <div>
+            <p className="text-[10px] text-muted/40 uppercase tracking-widest font-medium mb-2">Input</p>
+            <pre className="bg-surface border border-border rounded-xl p-3 text-[10px] text-foreground/60 overflow-x-auto whitespace-pre-wrap">
+              {JSON.stringify(selRun.input, null, 2)}
+            </pre>
+          </div>
+          <div>
+            <p className="text-[10px] text-muted/40 uppercase tracking-widest font-medium mb-2">Output</p>
+            <pre className="bg-surface border border-border rounded-xl p-3 text-[10px] text-foreground/60 overflow-x-auto whitespace-pre-wrap"
+              style={{ maxHeight: 260 }}>
+              {selRun.output ? JSON.stringify(selRun.output, null, 2) : '—'}
+            </pre>
+          </div>
+          {loadLogs && <p className="text-xs text-muted/30">Tool logları yükleniyor…</p>}
+          {!loadLogs && runLogs.length > 0 && (
+            <div>
+              <p className="text-[10px] text-muted/40 uppercase tracking-widest font-medium mb-2">Tool Logları</p>
+              <div className="flex flex-col gap-1.5">
+                {runLogs.map((log) => (
+                  <div key={log.id} className="px-3 py-2 bg-surface border border-border rounded-lg">
+                    <p className="text-[9px] font-semibold mb-0.5" style={{ color: RUNNER_ACCENT + 'bb' }}>{log.action}</p>
+                    <p className="text-[10px] text-foreground/40 truncate">{log.result}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {!loadLogs && runLogs.length === 0 && (
+            <p className="text-[10px] text-muted/30">Tool log yok (direkt JSON ajanı).</p>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── page ─────────────────────────────────────────────────────────────────────
 
 type ModalState = { agent: Agent; color: string } | null
 
 export default function AgentPanelPage() {
-  const [tab,     setTab]     = useState<'agentler' | 'office'>('agentler')
+  const [tab,     setTab]     = useState<'agentler' | 'office' | 'runner'>('agentler')
   const [modal,   setModal]   = useState<ModalState>(null)
   const [detail,  setDetail]  = useState<ModalState>(null)
 
@@ -739,7 +1008,11 @@ export default function AgentPanelPage() {
 
           {/* ── tab bar ── */}
           <div className="flex gap-1 mb-6">
-            {(['agentler', 'office'] as const).map((t) => (
+            {([
+              ['agentler', '👥 Agentler'],
+              ['office',   '🏢 Office'],
+              ['runner',   '⚙️ Runner'],
+            ] as const).map(([t, label]) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -749,7 +1022,7 @@ export default function AgentPanelPage() {
                     : 'text-muted hover:text-foreground border border-border/50 hover:border-border'
                 }`}
               >
-                {t === 'agentler' ? '👥 Agentler' : '🏢 Office'}
+                {label}
               </button>
             ))}
           </div>
@@ -760,6 +1033,9 @@ export default function AgentPanelPage() {
           )}
           {tab === 'office' && (
             <OfficeTab onModal={openModal} onDetail={openDetail} />
+          )}
+          {tab === 'runner' && (
+            <RunnerTab />
           )}
 
         </div>

@@ -6,4 +6,5 @@ export interface AgentDefinition {
   moduleTarget: string | null
   outputContract: string
   maxTokens?: number
+  webSearch?: boolean
 }
