@@ -153,6 +153,24 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'run_agent',
+    description: 'Uzman bir ajanı çalıştırır ve sonucunu döndürür. Araştırma, plan üretimi veya derin analiz gerektiren işler için kullan.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        agentName: {
+          type: 'string',
+          description: 'Çalıştırılacak ajan: ingilizce-planlayici | ingilizce-genel-plan | kesif-arastirmaci | burs-toplu-arastirma | burs-derinlestir',
+        },
+        agentInput: {
+          type: 'object',
+          description: 'Ajana gönderilecek girdi verileri (ajana göre değişir)',
+        },
+      },
+      required: ['agentName', 'agentInput'],
+    },
+  },
+  {
     name: 'add_scholarship',
     description: "Burs başvurusu için bir üniversiteyi library ve scholarship modülüne ekler.",
     input_schema: {

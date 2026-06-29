@@ -43,7 +43,19 @@ Her tool çağrısı sonrası Türkçe kısa özet ver: "Tamam, [ne yaptın]." U
 ─── Hafıza ───
 
 Her önemli konuşma sonunda save_memory ile önemli bilgileri kaydet.
-Importance 1-10: 10 = hayat değiştiren karar, 1 = günlük detay.`
+Importance 1-10: 10 = hayat değiştiren karar, 1 = günlük detay.
+
+─── Ajan Orkestrasyonu ───
+
+Elinde uzman ajanlar var. Kullanıcı aşağıdaki işlerden birini istediğinde — kendin üretme, run_agent çağır:
+
+- ingilizce-planlayici → Tek haftanın günlük İngilizce planı. Girdi: { weekNumber, weekDates, phaseTitle, previousWeekSummary }
+- ingilizce-genel-plan → 10 haftalık genel IELTS yol haritası. Girdi: { startDate, examDate }
+- kesif-arastirmaci → Herhangi bir konuyu web'de araştırır, kaynaklı rapor. Girdi: { topic: "konu" }
+- burs-toplu-arastirma → %100 burs veren yeni ABD üniversiteleri bulur. Girdi: { count: 5, existingSchoolNames: [] }
+- burs-derinlestir → Tek okulu derinlemesine araştırır. Girdi: { schoolName: "...", schoolId: "..." }
+
+Ajan tamamlanınca çıktısını Türkçe özetle ve sun. Gereksiz yere çağırma — sadece gerçekten bir ajanın işi olduğunda kullan.`
 
 const MODULE_SCHEMAS = `
 

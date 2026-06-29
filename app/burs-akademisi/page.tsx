@@ -262,10 +262,14 @@ function DetailPanel({
   school,
   onClose,
   onStatusChange,
+  onDeepen,
+  deepenLoading,
 }: {
   school: School
   onClose: () => void
   onStatusChange: (id: string, status: SchoolStatus) => void
+  onDeepen: (id: string) => void
+  deepenLoading: boolean
 }) {
   const sm = STATUS_META[school.status]
   const tc = typeColor(school.scholarshipType)
@@ -360,6 +364,25 @@ function DetailPanel({
             </div>
           )}
 
+          {/* deepen button */}
+          <button
+            onClick={() => onDeepen(school.id)}
+            disabled={deepenLoading}
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-80 disabled:opacity-50 mb-3"
+            style={{ background: `${GOLD}14`, color: GOLD, border: `1px solid ${GOLD}30` }}
+          >
+            {deepenLoading ? (
+              <span className="flex items-center gap-1">
+                {[0, 1, 2].map((i) => (
+                  <span key={i} className="w-1 h-1 rounded-full animate-bounce"
+                    style={{ background: GOLD, animationDelay: `${i * 100}ms` }} />
+                ))}
+              </span>
+            ) : (
+              'Bu okulu derinleştir'
+            )}
+          </button>
+
           {/* official link */}
           <a
             href={school.officialUrl}
@@ -385,6 +408,8 @@ export default function BursAkademiPage() {
   const [filterType,     setFilterType]     = useState('all')
   const [filterStatus,   setFilterStatus]   = useState('all')
   const [selectedSchool, setSelectedSchool] = useState<School | null>(null)
+  const [researchLoading, setResearchLoading] = useState(false)
+  const [deepenLoading,   setDeepenLoading]   = useState<string | null>(null)
 
   useEffect(() => {
     dbLoadModules().then((mods) => {
@@ -401,6 +426,74 @@ export default function BursAkademiPage() {
       }
     }).catch(() => setSchools(SEED_SCHOOLS)).finally(() => setLoaded(true))
   }, [])
+
+  const researchMoreSchools = async () => {
+    if (researchLoading) return
+    setResearchLoading(true)
+    try {
+      const res = await fetch('/api/agents/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentName: 'burs-toplu-arastirma',
+          input: { count: 5, existingSchoolNames: schools.map((s) => s.name) },
+        }),
+      })
+      const run = await res.json()
+      const newSchools = (run.output?.schools as School[] | undefined) ?? []
+      if (newSchools.length > 0) {
+        const existingIds   = new Set(schools.map((s) => s.id))
+        const existingNames = new Set(schools.map((s) => s.name.toLowerCase()))
+        const deduped = newSchools.filter(
+          (s) => !existingIds.has(s.id) && !existingNames.has(s.name.toLowerCase())
+        )
+        if (deduped.length > 0) {
+          const merged = [...schools, ...deduped]
+          setSchools(merged)
+          await dbExecuteAction({
+            type: 'UPDATE_MODULE',
+            payload: { id: 'burs-akademisi', patch: { schools: merged } },
+          }).catch(() => {})
+        }
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setResearchLoading(false)
+    }
+  }
+
+  const deepenSchool = async (schoolId: string) => {
+    if (deepenLoading) return
+    setDeepenLoading(schoolId)
+    const school = schools.find((s) => s.id === schoolId)
+    if (!school) { setDeepenLoading(null); return }
+    try {
+      const res = await fetch('/api/agents/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentName: 'burs-derinlestir',
+          input: { schoolName: school.name, schoolId: school.id },
+        }),
+      })
+      const run = await res.json()
+      const patch = run.output as Partial<School> | undefined
+      if (patch && typeof patch === 'object') {
+        const updated = schools.map((s) => s.id === schoolId ? { ...s, ...patch } : s)
+        setSchools(updated)
+        setSelectedSchool((p) => (p?.id === schoolId ? { ...p, ...patch } : p))
+        await dbExecuteAction({
+          type: 'UPDATE_MODULE',
+          payload: { id: 'burs-akademisi', patch: { schools: updated } },
+        }).catch(() => {})
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setDeepenLoading(null)
+    }
+  }
 
   const updateStatus = (schoolId: string, status: SchoolStatus) => {
     const updated = schools.map((s) => s.id === schoolId ? { ...s, status } : s)
@@ -455,6 +548,23 @@ export default function BursAkademiPage() {
                 </div>
               )}
               <span className="text-xs text-muted/40">{schools.length} okul</span>
+              <button
+                onClick={researchMoreSchools}
+                disabled={researchLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all disabled:opacity-60"
+                style={{ background: `${GOLD}18`, color: GOLD, border: `1px solid ${GOLD}30` }}
+              >
+                {researchLoading ? (
+                  <>
+                    {[0, 1, 2].map((i) => (
+                      <span key={i} className="w-1 h-1 rounded-full animate-bounce"
+                        style={{ background: GOLD, animationDelay: `${i * 100}ms` }} />
+                    ))}
+                  </>
+                ) : (
+                  '+ Daha fazla okul araştır'
+                )}
+              </button>
             </div>
           </div>
           <p className="text-sm text-muted/50">ABD'de tam burs veren üniversiteler — uluslararası öğrenciler için</p>
@@ -508,6 +618,8 @@ export default function BursAkademiPage() {
           school={selectedSchool}
           onClose={() => setSelectedSchool(null)}
           onStatusChange={updateStatus}
+          onDeepen={deepenSchool}
+          deepenLoading={deepenLoading === selectedSchool.id}
         />
       )}
     </div>

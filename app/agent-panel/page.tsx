@@ -1,29 +1,40 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+
+// ─── constants ────────────────────────────────────────────────────────────────
+
+const GOLD = '#c8a96e'
+
+const AGENT_DESC: Record<string, string> = {
+  'ingilizce-genel-plan':  '10 haftalık IELTS yol haritası üretir',
+  'ingilizce-planlayici':  'Haftalık detaylı günlük ders planı hazırlar',
+  'kesif-arastirmaci':     "Web'de derinlemesine araştırma ve analiz yapar",
+  'burs-toplu-arastirma':  'ABD üniversiteleri toplu burs araştırması yürütür',
+  'burs-derinlestir':      'Tek okul için ayrıntılı burs profili çıkarır',
+  'test-agent':            "Sistem smoke-test — input'u echo eder",
+}
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
 type Status = 'active' | 'idle' | 'done'
 
 interface Agent {
-  id: string
-  name: string
-  role: string
-  status: Status
-  lastTask: string
-  current: string
-  tasks: string[]
+  id: string; name: string; role: string; status: Status
+  lastTask: string; current: string; tasks: string[]
 }
+interface Group { id: string; label: string; color: string; agents: Agent[] }
 
-interface Group {
-  id: string
-  label: string
-  color: string
-  agents: Agent[]
+interface AgentMeta { name: string; displayName: string; moduleTarget: string | null }
+interface AgentRun {
+  id: string; agent_name: string; status: string
+  input: unknown; output: unknown
+  module_target: string | null; error: string | null
+  started_at: string; finished_at: string | null
 }
+interface AgentLog { id: string; action: string; result: string; created_at: string }
 
-// ─── data ─────────────────────────────────────────────────────────────────────
+// ─── mock data (Office tab only) ─────────────────────────────────────────────
 
 const GROUPS: Group[] = [
   {
@@ -56,10 +67,10 @@ const GROUPS: Group[] = [
         tasks: ['Rakip portföy', 'Fiyat stratejisi', 'Zayıflık analizi'] },
       { id: 'stok', name: 'Ticaret Agent 3', role: 'Stok Yönetimi', status: 'active',
         lastTask: '3 ürün için kritik stok uyarısı gönderildi.',
-        current: 'Depodaki 47 SKU\'nun stok durumunu anlık izliyor.',
+        current: "Depodaki 47 SKU'nun stok durumunu anlık izliyor.",
         tasks: ['Stok izleme', 'Kritik uyarı', 'Tedarik tahmini'] },
       { id: 'siparis', name: 'Ticaret Agent 4', role: 'Sipariş Takibi', status: 'idle',
-        lastTask: "Bugün 23 siparişin kargo durumu güncellendi.",
+        lastTask: 'Bugün 23 siparişin kargo durumu güncellendi.',
         current: 'Standby — yeni sipariş bekleniyor.',
         tasks: ['Kargo takip', 'Müşteri bildirim', 'İade yönetimi'] },
     ],
@@ -72,11 +83,11 @@ const GROUPS: Group[] = [
         current: 'WhatsApp kanalını izliyor — kuyrukta 3 mesaj bekliyor.',
         tasks: ['Otomatik yanıt', 'Şikayet yönlendirme', 'Kampanya mesajı'] },
       { id: 'randevu', name: 'Otomasyon Agent 2', role: 'Randevu Sistemi', status: 'idle',
-        lastTask: "Yarın için 4 teslimat randevusu onaylandı.",
+        lastTask: 'Yarın için 4 teslimat randevusu onaylandı.',
         current: 'Standby.',
         tasks: ['Randevu oluştur', 'Hatırlatma gönder', 'Takvim senkronizasyonu'] },
       { id: 'urun', name: 'Otomasyon Agent 3', role: 'Ürün Listeleme', status: 'active',
-        lastTask: '7 yeni ürün Trendyol\'a otomatik olarak listelendi.',
+        lastTask: "7 yeni ürün Trendyol'a otomatik olarak listelendi.",
         current: '15 ürün için SEO optimizasyonu yapıyor.',
         tasks: ['Oto listeleme', 'Başlık optimizasyonu', 'Görsel düzenleme'] },
       { id: 'rapor', name: 'Otomasyon Agent 4', role: 'Raporlama', status: 'done',
@@ -97,7 +108,7 @@ const GROUPS: Group[] = [
         current: 'Standby.',
         tasks: ['Trend tarama', 'Viral içerik', 'Rakip takip'] },
       { id: 'zamanlama', name: 'Sosyal Agent 3', role: 'Zamanlama', status: 'active',
-        lastTask: "Bugünkü 2 post zamanında yayınlandı.",
+        lastTask: 'Bugünkü 2 post zamanında yayınlandı.',
         current: 'Yarının içerik takvimini optimize ediyor.',
         tasks: ['Post zamanlama', 'En iyi saat analizi', 'Takvim yönetimi'] },
       { id: 'analitik', name: 'Sosyal Agent 4', role: 'Analitik', status: 'done',
@@ -110,34 +121,44 @@ const GROUPS: Group[] = [
 
 const ALL_AGENTS = GROUPS.flatMap((g) => g.agents.map((a) => ({ ...a, groupColor: g.color })))
 
-// ─── among us avatar ──────────────────────────────────────────────────────────
+// ─── utilities ────────────────────────────────────────────────────────────────
+
+function fmtTs(iso: string) {
+  const d = new Date(iso)
+  return d.toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
+function fmtRelative(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'az önce'
+  if (mins < 60) return `${mins} dk önce`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs} sa önce`
+  return `${Math.floor(hrs / 24)} gün önce`
+}
+
+// ─── among us avatar (office tab) ────────────────────────────────────────────
 
 function Avatar({ color, size = 44 }: { color: string; size?: number }) {
   const h = Math.round(size * 1.3)
-  // darken color for backpack
   const dark = color + 'bb'
   return (
     <svg width={size} height={h} viewBox="0 0 44 57" fill="none">
-      {/* head */}
       <ellipse cx="22" cy="17" rx="15" ry="15" fill={color} />
-      {/* visor */}
       <rect x="11" y="8" width="20" height="14" rx="7" fill="#c8e8f8" opacity="0.88" />
       <rect x="13" y="10" width="7" height="6" rx="3" fill="white" opacity="0.65" />
-      {/* body */}
       <rect x="8" y="27" width="28" height="20" rx="12" fill={color} />
-      {/* backpack */}
       <rect x="34" y="24" width="8" height="14" rx="4" fill={dark} />
-      {/* left leg */}
       <rect x="9" y="43" width="10" height="13" rx="5" fill={color} />
-      {/* right leg */}
       <rect x="25" y="43" width="10" height="13" rx="5" fill={color} />
     </svg>
   )
 }
 
-// ─── status badge ─────────────────────────────────────────────────────────────
+// ─── office badge (mock status) ──────────────────────────────────────────────
 
-function Badge({ status }: { status: Status }) {
+function OfficeBadge({ status }: { status: Status }) {
   const c = {
     active: { label: 'Çalışıyor',  dot: 'bg-emerald-400 animate-pulse', text: 'text-emerald-400', bg: 'bg-emerald-400/10' },
     idle:   { label: 'Beklemede',  dot: 'bg-amber-400/70',              text: 'text-amber-400/90', bg: 'bg-amber-400/10' },
@@ -151,7 +172,26 @@ function Badge({ status }: { status: Status }) {
   )
 }
 
-// ─── agent modal (standard click) ────────────────────────────────────────────
+// ─── run status badge (live runs) ────────────────────────────────────────────
+
+function RunBadge({ status, size = 'md' }: { status: string; size?: 'sm' | 'md' }) {
+  const c = ({
+    running: { label: 'Çalışıyor', dot: 'bg-amber-400 animate-pulse', text: 'text-amber-400',  bg: 'bg-amber-400/10'   },
+    done:    { label: 'Tamam',     dot: 'bg-emerald-400',              text: 'text-emerald-400', bg: 'bg-emerald-400/10' },
+    error:   { label: 'Hata',      dot: 'bg-red-400',                  text: 'text-red-400',     bg: 'bg-red-400/10'     },
+  } as Record<string, { label: string; dot: string; text: string; bg: string }>)[status]
+    ?? { label: status, dot: 'bg-gray-400', text: 'text-gray-400', bg: 'bg-gray-400/10' }
+  const px  = size === 'sm' ? 'px-2 py-0.5' : 'px-2 py-1'
+  const txt = size === 'sm' ? 'text-[9px]' : 'text-[9px]'
+  return (
+    <span className={`inline-flex items-center gap-1.5 ${px} rounded-full ${txt} font-semibold tracking-wide ${c.text} ${c.bg}`}>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot}`} />
+      {c.label}
+    </span>
+  )
+}
+
+// ─── office modals ───────────────────────────────────────────────────────────
 
 function AgentModal({ agent, color, onClose, onDetail }: {
   agent: Agent; color: string; onClose: () => void; onDetail: () => void
@@ -166,34 +206,26 @@ function AgentModal({ agent, color, onClose, onDetail }: {
         onClick={(e) => e.stopPropagation()}
       >
         <button onClick={onClose} className="absolute top-4 right-4 text-muted hover:text-foreground text-xl leading-none">×</button>
-
-        {/* head */}
         <div className="flex items-center gap-4 mb-5">
           <Avatar color={color} size={52} />
           <div>
             <p className="text-base font-semibold text-foreground">{agent.name}</p>
             <p className="text-xs text-muted mb-1.5">{agent.role}</p>
-            <Badge status={agent.status} />
+            <OfficeBadge status={agent.status} />
           </div>
         </div>
-
-        {/* last task */}
         <div className="mb-3">
           <p className="text-[10px] text-muted/50 uppercase tracking-widest font-medium mb-1.5">Son Görev</p>
           <div className="text-sm text-foreground/80 bg-surface rounded-xl px-3 py-2.5 border border-border leading-relaxed">
             {agent.lastTask}
           </div>
         </div>
-
-        {/* current */}
         <div className="mb-4">
           <p className="text-[10px] text-muted/50 uppercase tracking-widest font-medium mb-1.5">Şu An Ne Yapıyor</p>
           <div className="text-sm text-foreground/80 bg-surface rounded-xl px-3 py-2.5 border border-border leading-relaxed">
             {agent.current}
           </div>
         </div>
-
-        {/* assign task */}
         <div>
           <p className="text-[10px] text-muted/50 uppercase tracking-widest font-medium mb-1.5">Görev Ver</p>
           <textarea
@@ -207,23 +239,17 @@ function AgentModal({ agent, color, onClose, onDetail }: {
             <button
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-background transition-opacity hover:opacity-80"
               style={{ background: color }}
-            >
-              Gönder
-            </button>
+            >Gönder</button>
             <button
               onClick={onDetail}
               className="px-4 py-2.5 rounded-xl text-sm font-medium border border-border text-muted hover:text-foreground transition-colors"
-            >
-              Detay
-            </button>
+            >Detay</button>
           </div>
         </div>
       </div>
     </div>
   )
 }
-
-// ─── detail modal (full-screen) ───────────────────────────────────────────────
 
 function DetailModal({ agent, color, onClose }: {
   agent: Agent; color: string; onClose: () => void
@@ -235,31 +261,23 @@ function DetailModal({ agent, color, onClose }: {
         className="relative ml-auto h-full bg-background border-l border-border w-full max-w-lg overflow-y-auto shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* top accent */}
         <div className="h-1 w-full" style={{ background: `linear-gradient(90deg, transparent, ${color}, transparent)` }} />
-
         <div className="p-8">
           <button onClick={onClose} className="absolute top-6 right-6 text-muted hover:text-foreground text-xl leading-none">×</button>
-
-          {/* identity */}
           <div className="flex items-center gap-5 mb-8">
             <Avatar color={color} size={72} />
             <div>
               <p className="font-display text-xl font-semibold text-foreground">{agent.name}</p>
               <p className="text-sm text-muted mt-0.5">{agent.role}</p>
-              <div className="mt-2"><Badge status={agent.status} /></div>
+              <div className="mt-2"><OfficeBadge status={agent.status} /></div>
             </div>
           </div>
-
-          {/* current status */}
           <section className="mb-6">
             <h3 className="text-[10px] text-muted/50 uppercase tracking-widest font-medium mb-3">Şu An</h3>
             <div className="bg-surface border rounded-xl p-4" style={{ borderColor: `${color}30` }}>
               <p className="text-sm text-foreground/85 leading-relaxed">{agent.current}</p>
             </div>
           </section>
-
-          {/* task history */}
           <section className="mb-6">
             <h3 className="text-[10px] text-muted/50 uppercase tracking-widest font-medium mb-3">Geçmiş Görevler</h3>
             <div className="flex flex-col gap-2">
@@ -272,8 +290,6 @@ function DetailModal({ agent, color, onClose }: {
               ))}
             </div>
           </section>
-
-          {/* capabilities */}
           <section className="mb-8">
             <h3 className="text-[10px] text-muted/50 uppercase tracking-widest font-medium mb-3">Yetenekler</h3>
             <div className="flex flex-wrap gap-2">
@@ -285,100 +301,423 @@ function DetailModal({ agent, color, onClose }: {
               ))}
             </div>
           </section>
-
-          {/* assign task */}
-          <section>
-            <h3 className="text-[10px] text-muted/50 uppercase tracking-widest font-medium mb-3">Görev Ver</h3>
-            <textarea
-              placeholder={`${agent.name}'e bir görev ver...`}
-              rows={3}
-              className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted/40 resize-none focus:outline-none focus:border-gold/40 transition-colors mb-3"
-            />
-            <button
-              className="w-full py-3 rounded-xl text-sm font-semibold text-background transition-opacity hover:opacity-85"
-              style={{ background: color }}
-            >
-              Görevi Gönder
-            </button>
-          </section>
         </div>
       </div>
     </div>
   )
 }
 
-// ─── agent card ───────────────────────────────────────────────────────────────
+// ─── live agent card ─────────────────────────────────────────────────────────
 
-function AgentCard({ agent, color, onModal, onDetail }: {
-  agent: Agent; color: string; onModal: () => void; onDetail: () => void
+function LiveAgentCard({ agent, latestRun, runCount, isSelected, onClick }: {
+  agent: AgentMeta
+  latestRun?: AgentRun
+  runCount: number
+  isSelected: boolean
+  onClick: () => void
 }) {
+  const isRunning = latestRun?.status === 'running'
+  const isError   = latestRun?.status === 'error'
+  const desc      = AGENT_DESC[agent.name] ?? 'AI agent'
+
+  const borderTopColor = isError ? '#ef4444' : GOLD
+  const borderColor    = isSelected
+    ? `${GOLD}70`
+    : isRunning
+    ? `${GOLD}35`
+    : '#1e2230'
+  const shadow = isRunning
+    ? `0 0 24px ${GOLD}18, 0 2px 8px rgba(0,0,0,0.5)`
+    : isSelected
+    ? `0 0 16px ${GOLD}12, 0 2px 8px rgba(0,0,0,0.4)`
+    : '0 1px 4px rgba(0,0,0,0.4)'
+
   return (
-    <div
-      className="bg-surface border border-border rounded-2xl p-4 flex flex-col gap-3 hover:border-border/60 transition-colors cursor-pointer select-none"
-      style={{ borderTopColor: color, borderTopWidth: '2px' }}
-      onClick={onModal}
+    <button
+      onClick={onClick}
+      className="group text-left w-full rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 flex flex-col overflow-hidden"
+      style={{
+        background: '#0d1117',
+        borderTopColor,
+        borderTopWidth: '2px',
+        borderLeftColor: borderColor,
+        borderRightColor: borderColor,
+        borderBottomColor: borderColor,
+        boxShadow: shadow,
+        animation: isRunning ? 'cardGlow 2.4s ease-in-out infinite' : 'none',
+      }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <Avatar color={color} size={40} />
-        <div className="flex flex-col items-end gap-1">
-          <Badge status={agent.status} />
-          <button
-            onClick={(e) => { e.stopPropagation(); onDetail() }}
-            title="Detay"
-            className="text-[10px] text-muted/40 hover:text-muted transition-colors px-1"
-          >
-            ···
-          </button>
+      {/* body */}
+      <div className="px-5 pt-5 pb-4 flex flex-col gap-2.5 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <p className="text-[15px] font-semibold text-foreground leading-snug line-clamp-1 group-hover:text-gold transition-colors duration-150">
+              {agent.displayName}
+            </p>
+            <p className="text-[11px] text-muted/50 mt-0.5 leading-snug">{desc}</p>
+          </div>
+
+          {/* live pulse for running */}
+          {isRunning && (
+            <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+                  style={{ background: GOLD }} />
+                <span className="relative inline-flex rounded-full h-2 w-2"
+                  style={{ background: GOLD }} />
+              </span>
+              <span className="text-[9px] font-semibold uppercase tracking-wide"
+                style={{ color: GOLD }}>Live</span>
+            </div>
+          )}
+        </div>
+
+        <p className="text-[9px] font-mono text-muted/25">{agent.name}</p>
+      </div>
+
+      {/* footer */}
+      <div className="px-5 pb-4 flex items-center justify-between gap-3">
+        {latestRun
+          ? <RunBadge status={latestRun.status} size="sm" />
+          : <span className="text-[9px] italic text-muted/20">Hiç çalışmadı</span>
+        }
+        <div className="flex items-center gap-3 text-[10px] text-muted/30 shrink-0">
+          {runCount > 0 && (
+            <span>{runCount >= 20 ? '20+' : runCount} çalıştırma</span>
+          )}
+          {latestRun && (
+            <span>{fmtRelative(latestRun.started_at)}</span>
+          )}
         </div>
       </div>
-      <div>
-        <p className="text-sm font-semibold text-foreground leading-snug">{agent.name}</p>
-        <p className="text-[11px] text-muted mt-0.5">{agent.role}</p>
-      </div>
+
+      {/* bottom accent for running */}
+      {isRunning && (
+        <div className="h-[1px] w-full" style={{
+          background: `linear-gradient(90deg, transparent, ${GOLD}60, transparent)`,
+        }} />
+      )}
+    </button>
+  )
+}
+
+// ─── run row (expandable) ─────────────────────────────────────────────────────
+
+function RunRow({ run }: { run: AgentRun }) {
+  const [open,    setOpen]    = useState(false)
+  const [logs,    setLogs]    = useState<AgentLog[]>([])
+  const [loading, setLoading] = useState(false)
+  const [loaded,  setLoaded]  = useState(false)
+
+  const toggle = async () => {
+    if (!open && !loaded) {
+      setLoading(true)
+      const r = await fetch(`/api/agents/logs?run_id=${run.id}`)
+      setLogs(await r.json())
+      setLoaded(true)
+      setLoading(false)
+    }
+    setOpen((v) => !v)
+  }
+
+  const inputSummary = (() => {
+    if (!run.input) return null
+    const obj = run.input as Record<string, unknown>
+    const keys = Object.keys(obj)
+    return keys.slice(0, 2).join(', ') + (keys.length > 2 ? ` +${keys.length - 2}` : '')
+  })()
+
+  return (
+    <div className="rounded-xl border border-border overflow-hidden transition-colors"
+      style={{ background: '#0d1117', borderColor: open ? `${GOLD}30` : '#1e2230' }}>
+      {/* row header */}
+      <button
+        onClick={toggle}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.02] transition-colors"
+      >
+        <RunBadge status={run.status} size="sm" />
+        <span className="text-[10px] font-mono text-muted/40 flex-1 truncate">{run.id}</span>
+        {inputSummary && (
+          <span className="text-[9px] text-muted/25 hidden sm:block shrink-0">{inputSummary}</span>
+        )}
+        <span className="text-[10px] text-muted/30 shrink-0">{fmtTs(run.started_at)}</span>
+        <span className="text-[10px] shrink-0 transition-transform duration-200"
+          style={{ color: `${GOLD}70`, transform: open ? 'rotate(90deg)' : 'none' }}>
+          ›
+        </span>
+      </button>
+
+      {/* expanded detail */}
+      {open && (
+        <div className="border-t border-border/50 px-4 pb-4 pt-3 flex flex-col gap-3">
+          {run.error && (
+            <div className="px-3 py-2.5 rounded-lg text-xs text-red-400 leading-relaxed"
+              style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.18)' }}>
+              {run.error}
+            </div>
+          )}
+
+          {/* input */}
+          <div>
+            <p className="text-[9px] text-muted/35 uppercase tracking-widest font-medium mb-1.5">Input</p>
+            <pre className="rounded-lg px-3 py-2.5 text-[10px] text-foreground/50 overflow-x-auto whitespace-pre-wrap leading-relaxed"
+              style={{ background: '#080c12', border: '1px solid #1a1f2e', maxHeight: 160 }}>
+              {JSON.stringify(run.input, null, 2)}
+            </pre>
+          </div>
+
+          {/* output */}
+          <div>
+            <p className="text-[9px] text-muted/35 uppercase tracking-widest font-medium mb-1.5">Output</p>
+            <pre className="rounded-lg px-3 py-2.5 text-[10px] text-foreground/55 overflow-x-auto whitespace-pre-wrap leading-relaxed"
+              style={{ background: '#080c12', border: '1px solid #1a1f2e', maxHeight: 220 }}>
+              {run.output ? JSON.stringify(run.output, null, 2) : '—'}
+            </pre>
+          </div>
+
+          {/* logs */}
+          {loading && (
+            <p className="text-[10px] text-muted/25">Loglar yükleniyor…</p>
+          )}
+          {!loading && logs.length > 0 && (
+            <div>
+              <p className="text-[9px] text-muted/35 uppercase tracking-widest font-medium mb-1.5">Tool Logları</p>
+              <div className="flex flex-col gap-1">
+                {logs.map((log) => (
+                  <div key={log.id} className="px-3 py-2 rounded-lg"
+                    style={{ background: '#080c12', border: '1px solid #1a1f2e' }}>
+                    <p className="text-[9px] font-semibold mb-0.5" style={{ color: `${GOLD}aa` }}>{log.action}</p>
+                    <p className="text-[10px] text-foreground/35 truncate">{log.result}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {!loading && loaded && logs.length === 0 && (
+            <p className="text-[10px] text-muted/20">Tool log yok.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-// ─── group section ────────────────────────────────────────────────────────────
+// ─── agent detail panel ───────────────────────────────────────────────────────
 
-function GroupSection({ group, onModal, onDetail }: {
-  group: Group
-  onModal: (a: Agent) => void
-  onDetail: (a: Agent) => void
+function AgentDetailPanel({
+  agent,
+  latestRun,
+  runCount,
+  onClose,
+}: {
+  agent: AgentMeta
+  latestRun?: AgentRun
+  runCount: number
+  onClose: () => void
 }) {
-  const activeN = group.agents.filter((a) => a.status === 'active').length
+  const [runs,    setRuns]    = useState<AgentRun[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const load = useCallback(async () => {
+    const r = await fetch(`/api/agents/runs?agent=${agent.name}`)
+    setRuns(await r.json())
+    setLoading(false)
+  }, [agent.name])
+
+  useEffect(() => { load() }, [load])
+
+  // auto-refresh while any run is active
+  useEffect(() => {
+    const hasRunning = runs.some((r) => r.status === 'running')
+    if (!hasRunning) return
+    const id = setInterval(() => load(), 5000)
+    return () => clearInterval(id)
+  }, [runs, load])
+
+  const isRunning = latestRun?.status === 'running'
+  const desc      = AGENT_DESC[agent.name] ?? 'AI agent'
+
   return (
-    <div>
-      <div className="flex items-center gap-2 mb-3">
-        <span className="w-2.5 h-2.5 rounded-full" style={{ background: group.color }} />
-        <h2 className="text-xs font-semibold text-foreground/70 uppercase tracking-wider">{group.label}</h2>
-        <span className="text-[10px] text-muted/40 ml-auto">{activeN} aktif</span>
+    <>
+      {/* backdrop */}
+      <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      {/* panel */}
+      <div
+        className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-[520px] bg-background border-l border-border overflow-y-auto"
+        style={{ boxShadow: '-8px 0 40px rgba(0,0,0,0.7)' }}
+      >
+        {/* accent line */}
+        <div className="h-[2px] w-full"
+          style={{ background: `linear-gradient(90deg, transparent, ${GOLD}, ${GOLD}, transparent)` }} />
+
+        <div className="px-8 py-8">
+          <button
+            onClick={onClose}
+            className="absolute top-6 right-6 text-muted/40 hover:text-foreground text-xl leading-none transition-colors"
+          >
+            ×
+          </button>
+
+          {/* agent identity */}
+          <div className="mb-7">
+            <div className="flex items-start gap-3 mb-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="font-display text-2xl font-bold text-foreground leading-tight">
+                  {agent.displayName}
+                </h2>
+                <p className="text-sm text-muted/55 mt-0.5">{desc}</p>
+              </div>
+              {isRunning && (
+                <div className="flex items-center gap-1.5 shrink-0 mt-1">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+                      style={{ background: GOLD }} />
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5"
+                      style={{ background: GOLD }} />
+                  </span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider"
+                    style={{ color: GOLD }}>Çalışıyor</span>
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] font-mono text-muted/25">{agent.name}</p>
+          </div>
+
+          {/* stats row */}
+          <div className="grid grid-cols-3 gap-3 mb-7">
+            {[
+              { label: 'Toplam Çalıştırma', value: runCount >= 20 ? '20+' : runCount > 0 ? String(runCount) : '—' },
+              { label: 'Son Durum',         value: latestRun?.status ?? '—' },
+              { label: 'Son Çalışma',       value: latestRun ? fmtRelative(latestRun.started_at) : '—' },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-xl border border-border p-3 flex flex-col gap-1"
+                style={{ background: '#0d1117' }}>
+                <p className="text-[9px] text-muted/35 uppercase tracking-widest font-medium">{label}</p>
+                <p className="text-sm font-semibold text-foreground">{value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* runs list */}
+          <div>
+            <p className="text-[9px] text-muted/35 uppercase tracking-widest font-medium mb-3">
+              Son Çalıştırmalar
+            </p>
+
+            {loading && (
+              <div className="py-10 text-center text-sm text-muted/25">Yükleniyor…</div>
+            )}
+
+            {!loading && runs.length === 0 && (
+              <div className="py-10 text-center">
+                <p className="text-sm text-muted/25">Henüz çalıştırma yok.</p>
+                <p className="text-[10px] text-muted/15 mt-1">Runner sekmesinden çalıştırabilirsin.</p>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2">
+              {runs.map((run) => (
+                <RunRow key={run.id} run={run} />
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
-        {group.agents.map((a) => (
-          <AgentCard key={a.id} agent={a} color={group.color}
-            onModal={() => onModal(a)} onDetail={() => onDetail(a)} />
+    </>
+  )
+}
+
+// ─── live agents tab ──────────────────────────────────────────────────────────
+
+function LiveAgentsTab() {
+  const [agents,     setAgents]     = useState<AgentMeta[]>([])
+  const [latestRun,  setLatestRun]  = useState<Record<string, AgentRun>>({})
+  const [runCount,   setRunCount]   = useState<Record<string, number>>({})
+  const [selected,   setSelected]   = useState<AgentMeta | null>(null)
+  const [loadingAll, setLoadingAll] = useState(true)
+
+  const loadAll = useCallback(async () => {
+    const res  = await fetch('/api/agents/list')
+    const list: AgentMeta[] = await res.json()
+    setAgents(list)
+    setLoadingAll(false)
+
+    await Promise.all(list.map(async (a) => {
+      const r    = await fetch(`/api/agents/runs?agent=${a.name}`)
+      const runs: AgentRun[] = await r.json()
+      setRunCount((p) => ({ ...p, [a.name]: runs.length }))
+      if (runs.length > 0) setLatestRun((p) => ({ ...p, [a.name]: runs[0] }))
+    }))
+  }, [])
+
+  useEffect(() => { loadAll() }, [loadAll])
+
+  // poll every 5 s if any agent is running
+  useEffect(() => {
+    const anyRunning = Object.values(latestRun).some((r) => r.status === 'running')
+    if (!anyRunning) return
+    const id = setInterval(() => loadAll(), 5000)
+    return () => clearInterval(id)
+  }, [latestRun, loadAll])
+
+  const runningCount = Object.values(latestRun).filter((r) => r.status === 'running').length
+
+  return (
+    <>
+      <style>{`
+        @keyframes cardGlow {
+          0%, 100% { box-shadow: 0 0 16px ${GOLD}15, 0 2px 8px rgba(0,0,0,0.5); }
+          50%       { box-shadow: 0 0 28px ${GOLD}28, 0 2px 8px rgba(0,0,0,0.5); }
+        }
+      `}</style>
+
+      {/* live ticker */}
+      {runningCount > 0 && (
+        <div className="flex items-center gap-2 mb-5 px-4 py-2.5 rounded-xl"
+          style={{ background: `${GOLD}0d`, border: `1px solid ${GOLD}22` }}>
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75"
+              style={{ background: GOLD }} />
+            <span className="relative inline-flex rounded-full h-2 w-2"
+              style={{ background: GOLD }} />
+          </span>
+          <p className="text-[11px] font-medium" style={{ color: GOLD }}>
+            {runningCount} agent şu an çalışıyor — otomatik yenileniyor
+          </p>
+        </div>
+      )}
+
+      {loadingAll && (
+        <div className="py-16 text-center text-sm text-muted/25">Registry'den yükleniyor…</div>
+      )}
+
+      {!loadingAll && agents.length === 0 && (
+        <div className="py-16 text-center text-sm text-muted/25">Agent bulunamadı.</div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {agents.map((a) => (
+          <LiveAgentCard
+            key={a.name}
+            agent={a}
+            latestRun={latestRun[a.name]}
+            runCount={runCount[a.name] ?? 0}
+            isSelected={selected?.name === a.name}
+            onClick={() => setSelected(selected?.name === a.name ? null : a)}
+          />
         ))}
       </div>
-    </div>
-  )
-}
 
-// ─── agents tab ───────────────────────────────────────────────────────────────
-
-function AgentsTab({ onModal, onDetail }: {
-  onModal: (a: Agent, color: string) => void
-  onDetail: (a: Agent, color: string) => void
-}) {
-  return (
-    <div className="flex flex-col gap-8">
-      {GROUPS.map((g) => (
-        <GroupSection key={g.id} group={g}
-          onModal={(a) => onModal(a, g.color)}
-          onDetail={(a) => onDetail(a, g.color)}
+      {selected && (
+        <AgentDetailPanel
+          agent={selected}
+          latestRun={latestRun[selected.name]}
+          runCount={runCount[selected.name] ?? 0}
+          onClose={() => setSelected(null)}
         />
-      ))}
-    </div>
+      )}
+    </>
   )
 }
 
@@ -388,17 +727,14 @@ const AGENT_POSITIONS: Record<string, { left: string; top: string }> = {
   sanchez:   { left: '50%',  top: '290px' },
   kesif:     { left: '56%',  top: '316px' },
   hafiza:    { left: '44%',  top: '316px' },
-
   fiyat:     { left: '13%',  top: '50px'  },
   rakip:     { left: '13%',  top: '130px' },
   stok:      { left: '13%',  top: '210px' },
   siparis:   { left: '13%',  top: '290px' },
-
   whatsapp:  { left: '87%',  top: '50px'  },
   randevu:   { left: '87%',  top: '130px' },
   urun:      { left: '87%',  top: '210px' },
   rapor:     { left: '87%',  top: '290px' },
-
   icerik:    { left: '14%',  top: '503px' },
   trend:     { left: '38%',  top: '503px' },
   zamanlama: { left: '62%',  top: '503px' },
@@ -427,7 +763,7 @@ const BUBBLES = [
 const AREA_INFO: Record<string, { label: string; desc: string; color: string }> = {
   kutuphane: {
     label: 'Kütüphane / Veri Deposu',
-    desc: 'Tüm agent hafızaları burada saklanır. Geçmiş görevler, öğrenilen kalıplar ve veri arşivleri bu alanda tutulur. Hafıza Agenti buraya gelerek veri senkronizasyonu yapar.',
+    desc: 'Tüm agent hafızaları burada saklanır. Geçmiş görevler, öğrenilen kalıplar ve veri arşivleri bu alanda tutulur.',
     color: '#64748b',
   },
   sanchez: {
@@ -514,13 +850,12 @@ function OfficeTab({ onModal, onDetail }: {
         className="relative w-full rounded-2xl border border-border overflow-hidden select-none"
         style={{ height: '560px', background: '#07090b' }}
       >
-        {/* floor grid */}
         <div className="absolute inset-0 pointer-events-none"
           style={{ opacity: 0.035,
             backgroundImage: 'linear-gradient(#c8a96e 1px,transparent 1px),linear-gradient(90deg,#c8a96e 1px,transparent 1px)',
             backgroundSize: '36px 36px' }} />
 
-        {/* ── Kütüphane (top center) ── */}
+        {/* Kütüphane */}
         <div
           className="absolute z-10 cursor-pointer hover:brightness-125 transition-all"
           style={{ top: 0, left: '29%', right: '29%', height: '88px',
@@ -541,7 +876,7 @@ function OfficeTab({ onModal, onDetail }: {
           </div>
         </div>
 
-        {/* ── Ticaret (left column) ── */}
+        {/* Ticaret */}
         <div
           className="absolute z-10 cursor-pointer hover:brightness-110 transition-all"
           style={{ top: 0, left: 0, width: '27%', bottom: '108px',
@@ -559,7 +894,7 @@ function OfficeTab({ onModal, onDetail }: {
           ))}
         </div>
 
-        {/* ── Otomasyon (right column) ── */}
+        {/* Otomasyon */}
         <div
           className="absolute z-10 cursor-pointer hover:brightness-110 transition-all"
           style={{ top: 0, right: 0, width: '27%', bottom: '108px',
@@ -577,18 +912,16 @@ function OfficeTab({ onModal, onDetail }: {
           ))}
         </div>
 
-        {/* ── Sanchez center ── */}
+        {/* Sanchez center */}
         <div
           className="absolute z-10 cursor-pointer"
           style={{ top: 88, left: '27%', right: '27%', bottom: '108px' }}
           onClick={(e) => { e.stopPropagation(); setAreaModal('sanchez') }}
         >
-          {/* ambient glow */}
           <div className="absolute pointer-events-none"
             style={{ left: '50%', top: '50%', transform: 'translate(-50%,-50%)',
               width: 220, height: 220, borderRadius: '50%',
               background: 'radial-gradient(circle, rgba(200,169,110,0.08) 0%, transparent 65%)' }} />
-          {/* round table */}
           <div className="absolute pointer-events-none"
             style={{ left: '50%', top: '50%', transform: 'translate(-50%,-50%)',
               width: 96, height: 96, borderRadius: '50%',
@@ -599,7 +932,7 @@ function OfficeTab({ onModal, onDetail }: {
           </div>
         </div>
 
-        {/* ── Sosyal Medya (bottom strip) ── */}
+        {/* Sosyal Medya */}
         <div
           className="absolute bottom-0 left-0 right-0 z-10 cursor-pointer hover:brightness-110 transition-all"
           style={{ height: '108px', background: 'rgba(16,10,24,0.90)', borderTop: '1px solid rgba(168,85,247,0.22)' }}
@@ -618,7 +951,7 @@ function OfficeTab({ onModal, onDetail }: {
           ))}
         </div>
 
-        {/* ── Agents ── */}
+        {/* Agents */}
         {AGENT_IDS.map((id) => {
           const agent = ALL_AGENTS.find((a) => a.id === id)
           if (!agent) return null
@@ -649,7 +982,7 @@ function OfficeTab({ onModal, onDetail }: {
           )
         })}
 
-        {/* ── Speech bubble ── */}
+        {/* Speech bubble */}
         <div
           className="absolute z-30 pointer-events-none"
           style={{ left: bubble.left, top: bubble.top, opacity: bubbleOn ? 1 : 0, transition: 'opacity 0.4s ease' }}
@@ -664,7 +997,7 @@ function OfficeTab({ onModal, onDetail }: {
           </div>
         </div>
 
-        {/* ── Area info modal ── */}
+        {/* Area modal */}
         {areaModal && (() => {
           const info = AREA_INFO[areaModal]
           if (!info) return null
@@ -684,7 +1017,6 @@ function OfficeTab({ onModal, onDetail }: {
           )
         })()}
 
-        {/* legend */}
         <div className="absolute bottom-2 right-2 z-20 pointer-events-none">
           <span className="text-[9px]" style={{ color: 'rgba(100,116,139,0.3)' }}>
             tıkla: modal · 2× detay · alan tıkla: bilgi
@@ -696,17 +1028,6 @@ function OfficeTab({ onModal, onDetail }: {
 }
 
 // ─── runner tab ──────────────────────────────────────────────────────────────
-
-interface AgentMeta { name: string; displayName: string; moduleTarget: string | null }
-interface AgentRun {
-  id: string; agent_name: string; status: string
-  input: unknown; output: unknown
-  module_target: string | null; error: string | null
-  started_at: string; finished_at: string | null
-}
-interface AgentLog { id: string; action: string; result: string; created_at: string }
-
-const RUNNER_ACCENT = '#c8a96e'
 
 const MONTHS_TR_R = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık']
 const WEEK1_R = new Date('2026-06-29T00:00:00')
@@ -725,26 +1046,6 @@ function rWeekDates(wn: number): string {
 }
 
 function rPhaseTitle(wn: number): string { return PHASE_TITLES_R[wn] ?? `Hafta ${wn}` }
-
-function fmtTs(iso: string) {
-  const d = new Date(iso)
-  return d.toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-}
-
-function RunBadge({ status }: { status: string }) {
-  const c = ({
-    running: { label: 'Çalışıyor', dot: 'bg-amber-400 animate-pulse', text: 'text-amber-400',  bg: 'bg-amber-400/10'   },
-    done:    { label: 'Tamam',     dot: 'bg-emerald-400',              text: 'text-emerald-400', bg: 'bg-emerald-400/10' },
-    error:   { label: 'Hata',      dot: 'bg-red-400',                  text: 'text-red-400',     bg: 'bg-red-400/10'     },
-  } as Record<string, { label:string; dot:string; text:string; bg:string }>)[status]
-    ?? { label: status, dot: 'bg-gray-400', text: 'text-gray-400', bg: 'bg-gray-400/10' }
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[9px] font-semibold tracking-wide ${c.text} ${c.bg}`}>
-      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${c.dot}`} />
-      {c.label}
-    </span>
-  )
-}
 
 function RunnerTab() {
   const [agents,     setAgents]     = useState<AgentMeta[]>([])
@@ -819,6 +1120,7 @@ function RunnerTab() {
     } finally { setRunning(false) }
   }
 
+  const RUNNER_ACCENT = '#c8a96e'
   const agentMeta = agents.find((a) => a.name === selAgent)
 
   if (view === 'list') return (
@@ -969,79 +1271,54 @@ function RunnerTab() {
 type ModalState = { agent: Agent; color: string } | null
 
 export default function AgentPanelPage() {
-  const [tab,     setTab]     = useState<'agentler' | 'office' | 'runner'>('agentler')
-  const [modal,   setModal]   = useState<ModalState>(null)
-  const [detail,  setDetail]  = useState<ModalState>(null)
+  const [tab,    setTab]    = useState<'agentler' | 'runner'>('agentler')
+  const [modal,  setModal]  = useState<ModalState>(null)
+  const [detail, setDetail] = useState<ModalState>(null)
 
   const openModal  = (a: Agent, c: string) => { setDetail(null); setModal({ agent: a, color: c }) }
   const openDetail = (a: Agent, c: string) => { setModal(null);  setDetail({ agent: a, color: c }) }
-
-  const activeCount = ALL_AGENTS.filter((a) => a.status === 'active').length
-  const totalCount  = ALL_AGENTS.length
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-5xl mx-auto px-6 py-8">
 
-          {/* ── header ── */}
-          <div className="flex items-end justify-between mb-6">
-            <div>
-              <h1 className="font-display text-2xl font-semibold text-foreground">Agent Panel</h1>
-              <p className="text-sm text-muted mt-1">
-                <span className="text-emerald-400 font-medium">{activeCount}</span>
-                <span> aktif · </span>
-                <span className="text-foreground/50">{totalCount - activeCount} beklemede</span>
-              </p>
-            </div>
-
-            {/* group color legend */}
-            <div className="hidden sm:flex items-center gap-3">
-              {GROUPS.map((g) => (
-                <div key={g.id} className="flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full" style={{ background: g.color }} />
-                  <span className="text-[11px] text-muted/60">{g.label.split(' ')[0]}</span>
-                </div>
-              ))}
-            </div>
+          {/* header */}
+          <div className="mb-7">
+            <h1 className="font-display text-2xl font-bold text-foreground">Agent Panel</h1>
+            <p className="text-sm text-muted/50 mt-1">
+              Canlı agent registry — gerçek zamanlı durum ve çalıştırma geçmişi
+            </p>
           </div>
 
-          {/* ── tab bar ── */}
-          <div className="flex gap-1 mb-6">
+          {/* tab bar */}
+          <div className="flex gap-1 mb-7">
             {([
-              ['agentler', '👥 Agentler'],
-              ['office',   '🏢 Office'],
-              ['runner',   '⚙️ Runner'],
+              ['agentler', 'Agentler'],
+              ['runner',   'Runner'],
             ] as const).map(([t, label]) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
-                className={`text-xs px-4 py-2 rounded-xl font-medium transition-colors ${
-                  tab === t
-                    ? 'bg-gold text-background'
-                    : 'text-muted hover:text-foreground border border-border/50 hover:border-border'
-                }`}
+                className="text-xs px-4 py-2 rounded-xl font-semibold transition-all duration-150"
+                style={tab === t
+                  ? { background: GOLD, color: '#0a0c10' }
+                  : { color: 'rgba(148,163,184,0.6)', border: '1px solid rgba(255,255,255,0.06)' }
+                }
               >
                 {label}
               </button>
             ))}
           </div>
 
-          {/* ── content ── */}
-          {tab === 'agentler' && (
-            <AgentsTab onModal={openModal} onDetail={openDetail} />
-          )}
-          {tab === 'office' && (
-            <OfficeTab onModal={openModal} onDetail={openDetail} />
-          )}
-          {tab === 'runner' && (
-            <RunnerTab />
-          )}
+          {/* content */}
+          {tab === 'agentler' && <LiveAgentsTab />}
+          {tab === 'runner'   && <RunnerTab />}
 
         </div>
       </div>
 
-      {/* ── modals ── */}
+      {/* office modals */}
       {modal && (
         <AgentModal
           agent={modal.agent}

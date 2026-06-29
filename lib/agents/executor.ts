@@ -183,6 +183,13 @@ export async function serverExecuteTool(
       return { ok: true }
     }
 
+    case 'run_agent': {
+      const { agentName, agentInput } = input as { agentName: string; agentInput: Record<string, unknown> }
+      // Dynamic import breaks the circular dep (runner → executor → runner)
+      const { runAgent } = await import('./runner')
+      return await runAgent(agentName, agentInput, userId)
+    }
+
     default:
       return { ok: true, note: 'server-handled' }
   }
