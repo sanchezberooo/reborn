@@ -300,6 +300,18 @@ function BursAkademiCard({ mod }: { mod: ModuleItem | null }) {
   )
 }
 
+function TakvimCard() {
+  return (
+    <Card href="/takvim" color="#6eb5c8" icon="🗓️" title="Takvim">
+      <div className="flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full" style={{ background: '#6eb5c8' }} />
+        <span className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.55)' }}>Haftalık plan</span>
+      </div>
+      <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>7 gün × 24 saat görünüm</p>
+    </Card>
+  )
+}
+
 function NotionCard() {
   return (
     <Card href="/notion" color="#7c6ea9" icon="📝" title="Notion">
@@ -371,6 +383,7 @@ export default function DashboardPage() {
           <AgentCard />
           <BursAkademiCard    mod={mod('burs-akademisi')} />
           <ArsivCard          mod={mod('daily')} />
+          <TakvimCard />
           <NotionCard />
         </div>
 
