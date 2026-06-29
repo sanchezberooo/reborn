@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { dbLoadModules, dbExecuteAction } from '@/lib/db'
 
 // ─── types ────────────────────────────────────────────────────────────────────
@@ -10,7 +11,8 @@ export type Level = 'A1' | 'A2' | 'B1' | 'B2'
 export interface TopicItem {
   id: string
   title: string
-  body: React.ReactNode
+  body?: React.ReactNode
+  href?: string
 }
 
 export interface LevelContent {
@@ -100,7 +102,17 @@ function TopicCard({
   completed: boolean
   onToggle: (key: string) => void
 }) {
+  const router = useRouter()
   const [open, setOpen] = useState(false)
+  const isLink = Boolean(topic.href)
+
+  function handleHeaderClick() {
+    if (isLink && topic.href) {
+      router.push(topic.href)
+    } else {
+      setOpen((o) => !o)
+    }
+  }
 
   return (
     <div
@@ -122,7 +134,7 @@ function TopicCard({
           cursor: 'pointer',
           userSelect: 'none',
         }}
-        onClick={() => setOpen((o) => !o)}
+        onClick={handleHeaderClick}
       >
         {/* Checkbox */}
         <button
@@ -154,6 +166,7 @@ function TopicCard({
           {topic.title}
         </span>
 
+        {/* Chevron: rotates for accordion, static arrow for link */}
         <svg
           width="14"
           height="14"
@@ -161,14 +174,18 @@ function TopicCard({
           fill="none"
           stroke="#555"
           strokeWidth="2"
-          style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}
+          style={{
+            transform: isLink ? 'none' : open ? 'rotate(90deg)' : 'none',
+            transition: 'transform 0.2s',
+            flexShrink: 0,
+          }}
         >
           <polyline points="9 18 15 12 9 6" />
         </svg>
       </div>
 
-      {/* Accordion body */}
-      {open && (
+      {/* Accordion body — only for non-link topics */}
+      {!isLink && open && topic.body && (
         <div style={{ padding: '0 14px 14px', borderTop: '1px solid #1e1e1e' }}>
           <div style={{ paddingTop: 12 }}>
             {topic.body}
