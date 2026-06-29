@@ -300,6 +300,18 @@ function BursAkademiCard({ mod }: { mod: ModuleItem | null }) {
   )
 }
 
+function NotionCard() {
+  return (
+    <Card href="/notion" color="#7c6ea9" icon="📝" title="Notion">
+      <div className="flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full" style={{ background: '#7c6ea9' }} />
+        <span className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.55)' }}>Block editör</span>
+      </div>
+      <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>Sandbox → aç</p>
+    </Card>
+  )
+}
+
 function ArsivCard({ mod }: { mod: ModuleItem | null }) {
   const entries = ((mod?.data?.entries as Array<{date:string;summary?:string}>) ?? [])
   const last    = [...entries].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''))[0]
@@ -359,6 +371,7 @@ export default function DashboardPage() {
           <AgentCard />
           <BursAkademiCard    mod={mod('burs-akademisi')} />
           <ArsivCard          mod={mod('daily')} />
+          <NotionCard />
         </div>
 
       </div>
