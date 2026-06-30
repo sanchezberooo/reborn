@@ -72,7 +72,12 @@
       "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); & \"C:\\\\Users\\\\msi\\\\.agent-reach-venv\\\\Scripts\\\\agent-reach.exe\" doctor 2>&1)",
       "PowerShell(New-Item *)",
       "PowerShell($env:PATH = [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"PATH\",\"User\"\\); & \"C:\\\\Users\\\\msi\\\\.agent-reach-venv\\\\Scripts\\\\agent-reach.exe\" --help 2>&1)",
-      "PowerShell(rdt *)"
+      "PowerShell(rdt *)",
+      "Bash(findstr -i \"blocknote\\\\|supabase\")",
+      "Bash(npm list *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
