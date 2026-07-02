@@ -4,6 +4,12 @@ export const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 })
 
+// Sanchez'in ana modeli. Sonnet sınıfı: ~$3/M girdi + ~$15/M çıktı token.
+// Tipik bir Sanchez mesajı (sistem promptu ~3-4K + geçmiş + araç tanımları
+// ~2K girdi, ~300-800 çıktı token) yaklaşık $0.02-0.05/mesaj eder; araç
+// zincirleri (web search, run_agent) her turda girdiyi tekrar gönderdiği
+// için bunu 2-4 katına çıkarabilir. Ucuz/basit ajan işleri için registry'de
+// model: 'claude-haiku-4-5' override'ı kullan (~12 kat daha ucuz).
 export const CLAUDE_MODEL = 'claude-sonnet-4-6'
 
 // ─── Custom tool definitions ───────────────────────────────────────────────────
@@ -153,6 +159,17 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'read_essays',
+    description: "Kullanıcının essay'lerini ve her birinin SON versiyon metnini okur. essay-critic'i çalıştırmadan önce taslağı almak için kullan.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        essay_id: { type: 'string', description: 'Belirli bir essay ID (opsiyonel — verilmezse hepsi listelenir)' },
+      },
+      required: [],
+    },
+  },
+  {
     name: 'run_agent',
     description: 'Uzman bir ajanı çalıştırır ve sonucunu döndürür. Araştırma, plan üretimi veya derin analiz gerektiren işler için kullan.',
     input_schema: {
@@ -160,7 +177,7 @@ export const TOOLS: Anthropic.Tool[] = [
       properties: {
         agentName: {
           type: 'string',
-          description: 'Çalıştırılacak ajan: ingilizce-planlayici | ingilizce-genel-plan | kesif-arastirmaci | burs-toplu-arastirma | burs-derinlestir',
+          description: 'Çalıştırılacak ajan: ingilizce-planlayici | ingilizce-genel-plan | kesif-arastirmaci | burs-toplu-arastirma | burs-derinlestir | essay-brainstorm | essay-critic',
         },
         agentInput: {
           type: 'object',

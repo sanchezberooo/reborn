@@ -40,9 +40,9 @@ export const OFFICE_LAYOUT: Array<{ id: string; position: [number, number, numbe
   { id: 'kesif-arastirmaci',    position: [ 4.5, 0,  5.5] }, // right front
   { id: 'burs-derinlestir',     position: [ 6.5, 0,  1.0] }, // right mid
   { id: 'test-agent',           position: [ 5.5, 0, -3.5] }, // right back
-  { id: '__empty1__',           position: [-2.5, 0, -7.0] }, // back left
-  { id: '__empty2__',           position: [ 0.0, 0, -8.0] }, // back center
-  { id: '__empty3__',           position: [ 2.5, 0, -7.0] }, // back right
+  { id: 'essay-brainstorm',     position: [-2.5, 0, -7.0] }, // back left
+  { id: 'essay-critic',         position: [ 2.5, 0, -7.0] }, // back right
+  { id: '__empty1__',           position: [ 0.0, 0, -8.0] }, // back center
 ]
 
 const GOLD = '#c8a96e'

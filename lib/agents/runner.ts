@@ -64,7 +64,7 @@ export async function runAgent(
 
     while (true) {
       const response = await apiCreate({
-        model: CLAUDE_MODEL,
+        model: agent.model ?? CLAUDE_MODEL,
         system: agent.persona,
         messages,
         ...(toolsForCall.length > 0 ? { tools: toolsForCall } : {}),

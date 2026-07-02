@@ -298,6 +298,39 @@ create table if not exists public.calendar_events (
 
 create index if not exists calendar_events_start_idx on public.calendar_events(start_time);
 
+-- ── essays ──────────────────────────────────────────────────
+-- Essay koçluk sistemi (/essay sayfası). Ajanlar (essay-brainstorm,
+-- essay-critic) metin YAZMAZ — sadece soru/eleştiri üretir; içerik
+-- kullanıcı tarafından yazılıp essay_versions'a versiyonlanır.
+-- 2026-07-02: canlı DB'ye migration olarak uygulandı (add_essays_and_essay_versions).
+create table if not exists public.essays (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null,
+  title      text not null,
+  school     text,
+  prompt     text not null,
+  word_limit int,
+  status     text not null default 'brainstorm'
+             check (status in ('brainstorm', 'draft', 'revision', 'done')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists essays_user_id_idx on public.essays(user_id);
+
+-- ── essay_versions ──────────────────────────────────────────
+-- Her kayıt yeni versiyon; eski versiyonlar silinmez, görüntülenebilir.
+create table if not exists public.essay_versions (
+  id             uuid primary key default gen_random_uuid(),
+  essay_id       uuid not null references public.essays(id) on delete cascade,
+  version_number int not null,
+  content        text not null,
+  created_at     timestamptz not null default now(),
+  unique (essay_id, version_number)
+);
+
+create index if not exists essay_versions_essay_idx on public.essay_versions(essay_id, version_number desc);
+
 -- ── Auto-create profile on signup ───────────────────────────
 -- NOT: auth.users FK'leri kaldırıldığı için bu trigger artık
 -- fiilen tetiklenmiyor olabilir (gerçek signup akışı yok, bkz.

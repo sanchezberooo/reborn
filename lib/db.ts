@@ -533,6 +533,107 @@ export async function dbLoadJournalDates(): Promise<string[]> {
   return (data ?? []).map((r) => String((r as Record<string, unknown>).date).slice(0, 10))
 }
 
+// ─── Essays ───────────────────────────────────────────────────────────────────
+
+export type EssayStatus = 'brainstorm' | 'draft' | 'revision' | 'done'
+
+export interface Essay {
+  id: string
+  title: string
+  school: string | null
+  prompt: string
+  word_limit: number | null
+  status: EssayStatus
+  created_at: string
+  updated_at: string
+}
+
+export interface EssayVersion {
+  id: string
+  essay_id: string
+  version_number: number
+  content: string
+  created_at: string
+}
+
+export async function dbLoadEssays(): Promise<Essay[]> {
+  const userId = await uid()
+  const { data, error } = await db()
+    .from('essays')
+    .select('*')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as Essay[]
+}
+
+export async function dbCreateEssay(input: {
+  title: string
+  school?: string
+  prompt: string
+  word_limit?: number | null
+}): Promise<Essay> {
+  const userId = await uid()
+  const { data, error } = await db()
+    .from('essays')
+    .insert({ ...input, user_id: userId })
+    .select()
+    .single()
+  if (error) throw error
+  return data as Essay
+}
+
+export async function dbUpdateEssayMeta(
+  id: string,
+  patch: Partial<Pick<Essay, 'title' | 'school' | 'prompt' | 'word_limit' | 'status'>>
+): Promise<void> {
+  const { error } = await db()
+    .from('essays')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function dbDeleteEssay(id: string): Promise<void> {
+  const { error } = await db().from('essays').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function dbLoadEssayVersions(essayId: string): Promise<EssayVersion[]> {
+  const { data, error } = await db()
+    .from('essay_versions')
+    .select('*')
+    .eq('essay_id', essayId)
+    .order('version_number', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as EssayVersion[]
+}
+
+// Her kayıt yeni versiyon — mevcut en yüksek numaranın bir üstünü açar.
+export async function dbSaveEssayVersion(essayId: string, content: string): Promise<EssayVersion> {
+  const { data: last } = await db()
+    .from('essay_versions')
+    .select('version_number')
+    .eq('essay_id', essayId)
+    .order('version_number', { ascending: false })
+    .limit(1)
+    .single()
+
+  const nextNumber = ((last?.version_number as number) ?? 0) + 1
+  const { data, error } = await db()
+    .from('essay_versions')
+    .insert({ essay_id: essayId, version_number: nextNumber, content })
+    .select()
+    .single()
+  if (error) throw error
+
+  await db().from('essays')
+    .update({ updated_at: new Date().toISOString() })
+    .eq('id', essayId)
+
+  return data as EssayVersion
+}
+
 export async function dbLoadRecentJournalEntries(limit = 5): Promise<JournalEntry[]> {
   const userId = await uid()
   const { data, error } = await db()

@@ -16,6 +16,8 @@ const AGENT_DESC: Record<string, string> = {
   'kesif-arastirmaci':     "Web'de derinlemesine araştırma ve analiz yapar",
   'burs-toplu-arastirma':  'ABD üniversiteleri toplu burs araştırması yürütür',
   'burs-derinlestir':      'Tek okul için ayrıntılı burs profili çıkarır',
+  'essay-brainstorm':      'Essay için kişisel hikayeyi kazan sorular üretir',
+  'essay-critic':          'Essay taslağını 6 eksende eleştirir — metin yazmaz',
   'test-agent':            "Sistem smoke-test — input'u echo eder",
 }
 
@@ -26,6 +28,8 @@ const AGENT_ICONS: Record<string, string> = {
   'kesif-arastirmaci':     '🔍',
   'burs-toplu-arastirma':  '🎓',
   'burs-derinlestir':      '🏛️',
+  'essay-brainstorm':      '💭',
+  'essay-critic':          '✒️',
   'test-agent':            '🧪',
 }
 

@@ -180,6 +180,30 @@ export async function serverExecuteTool(
       return { ok: true }
     }
 
+    case 'read_essays': {
+      // Essay listesi + her birinin SON versiyonunun metni. Sanchez
+      // "essay'ime bak" akışında bunu okuyup run_agent(essay-critic)'e
+      // draft olarak geçirir.
+      const { essay_id } = input as { essay_id?: string }
+      let q = supabase.from('essays')
+        .select('id, title, school, prompt, word_limit, status, updated_at')
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
+      if (essay_id) q = q.eq('id', essay_id)
+      const { data: essays } = await q
+
+      const withVersions = await Promise.all((essays ?? []).map(async (e) => {
+        const { data: v } = await supabase.from('essay_versions')
+          .select('version_number, content, created_at')
+          .eq('essay_id', e.id)
+          .order('version_number', { ascending: false })
+          .limit(1)
+          .single()
+        return { ...e, latest_version: v ?? null }
+      }))
+      return withVersions
+    }
+
     case 'run_agent': {
       const { agentName, agentInput } = input as { agentName: string; agentInput: Record<string, unknown> }
       // Dynamic import breaks the circular dep (runner → executor → runner)

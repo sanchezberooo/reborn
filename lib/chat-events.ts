@@ -24,6 +24,7 @@ const TOOL_STATUS_LABELS: Record<string, string> = {
   update_module:       'modülü güncelliyor',
   add_roadmap_item:    'yol haritasına ekliyor',
   add_scholarship:     'burs ekliyor',
+  read_essays:         "essay'leri okuyor",
   run_agent:           'bir ajanı çalıştırıyor',
   web_search:          "web'de araştırıyor",
 }

@@ -95,7 +95,10 @@
       "Read(//c/Users/msi/Desktop/reborn/**)",
       "Bash(rm -f -- \"'\" \"console.error\\('ERR'\" \"m.id\" '`[${m.date}]')",
       "Bash(rm -rf app/office)",
-      "Bash(find app/office)"
+      "Bash(find app/office)",
+      "Bash(node -e \"const d=JSON.parse\\(require\\('fs'\\).readFileSync\\(0,'utf8'\\)\\); console.log\\('agents:', d.map\\(a=>a.name\\).join\\(', '\\)\\)\")",
+      "Bash(wc -c \"'\" \"'v'\" \"a.name\\).join\\('\" \"r.json\\(\\)\\)\" '`[${m.date}]')",
+      "Bash(rm -f -- \"'\" \"'v'\" \"a.name\\).join\\('\" \"r.json\\(\\)\\)\" '`[${m.date}]')"
     ]
   }
 }
