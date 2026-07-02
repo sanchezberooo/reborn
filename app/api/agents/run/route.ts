@@ -1,4 +1,5 @@
 import { runAgent } from '@/lib/agents/runner'
+import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
 export async function POST(req: Request) {
   const { agentName, input } = (await req.json()) as {
@@ -6,11 +7,7 @@ export async function POST(req: Request) {
     input: Record<string, unknown>
   }
 
-  const { createClient } = await import('@supabase/supabase-js')
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = getSupabaseAdmin()
 
   const { data: profile } = await supabase.from('profiles').select('id').limit(1).single()
   const userId = (profile?.id as string) ?? ''

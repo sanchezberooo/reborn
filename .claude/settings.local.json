@@ -77,7 +77,25 @@
       "Bash(npm list *)",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(git rm *)",
+      "Bash(node -e \"const m=require\\('lucide-react'\\); console.log\\(require\\('./node_modules/lucide-react/package.json'\\).version\\)\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3001/)",
+      "Bash(curl -s http://localhost:3001/)",
+      "Bash(curl -s -o /dev/null -w \"icon: %{http_code} %{content_type}\\\\n\" \"http://localhost:3001/icon?d4f85f4ecc23ed09\")",
+      "Bash(curl -s -o /dev/null -w \"og: %{http_code} %{content_type}\\\\n\" \"http://localhost:3001/opengraph-image?b20308cac0a6e8e0\")",
+      "Bash(curl *)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "PowerShell(Get-Process *)",
+      "Bash(grep -E '^\\(!lr|`\\\\[|\\\\{\\\\}\\\\\\)|^0$|^0\\\\\\)$|agent\\\\.toolNames|s\\\\.id|console\\\\.log\\)')",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue | Select-Object LocalPort,State,OwningProcess\")",
+      "Bash(powershell -Command \"Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue | Select-Object LocalPort,State,OwningProcess\")",
+      "Bash(powershell -Command \"Get-Content .next\\\\dev\\\\logs\\\\next-development.log -Tail 60 -ErrorAction SilentlyContinue\")",
+      "Bash(powershell -Command \"Get-Content .next\\\\dev\\\\logs\\\\next-development.log -Tail 15\")",
+      "Read(//c/Users/msi/Desktop/reborn/**)",
+      "Bash(rm -f -- \"'\" \"console.error\\('ERR'\" \"m.id\" '`[${m.date}]')",
+      "Bash(rm -rf app/office)",
+      "Bash(find app/office)"
     ]
   }
 }

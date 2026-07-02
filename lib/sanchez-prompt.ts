@@ -1,10 +1,5 @@
-import OpenAI from 'openai'
 import type { BeroProfile, Memory } from './memory'
 import type { ModuleItem } from './modules'
-
-export const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-})
 
 const SANCHEZ_BASE = `Sen Sanchez'sin.
 

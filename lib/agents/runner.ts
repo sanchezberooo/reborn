@@ -19,11 +19,8 @@ export async function runAgent(
   const agent = getAgent(agentName)
   if (!agent) return { ok: false, error: `Agent '${agentName}' bulunamadı`, notFound: true }
 
-  const { createClient } = await import('@supabase/supabase-js')
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const { getSupabaseAdmin } = await import('@/lib/supabase-admin')
+  const supabase = getSupabaseAdmin()
 
   const { data: runRow, error: insertError } = await supabase
     .from('agent_runs')

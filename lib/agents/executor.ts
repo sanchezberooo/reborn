@@ -3,11 +3,8 @@ export async function serverExecuteTool(
   input: Record<string, unknown>,
   userId: string
 ): Promise<unknown> {
-  const { createClient } = await import('@supabase/supabase-js')
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const { getSupabaseAdmin } = await import('@/lib/supabase-admin')
+  const supabase = getSupabaseAdmin()
 
   switch (name) {
     case 'read_habits': {

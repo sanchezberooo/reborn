@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { getSupabaseAdmin } from '@/lib/supabase-admin'
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -6,10 +6,7 @@ export async function GET(req: Request) {
 
   if (!runId) return Response.json({ error: 'run_id required' }, { status: 400 })
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = getSupabaseAdmin()
 
   const { data, error } = await supabase
     .from('agent_logs')

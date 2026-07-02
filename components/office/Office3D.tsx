@@ -12,7 +12,7 @@ export interface Agent3D {
   name: string
   icon: string
   color: string
-  status: 'active' | 'idle' | 'stopped'
+  status: 'active' | 'idle' | 'done' | 'stopped'
   module: string
   lastActivity?: string
   description?: string
@@ -28,17 +28,21 @@ export interface Agent3D {
 //  Left mid    (-6.5, 1.0)    Right mid    (6.5, 1.0)
 //  Left back   (-5.5,-3.5)    Right back   (5.5,-3.5)
 //  Back-L (-2.5,-7.0)  Back-C (0,-8.0)  Back-R (2.5,-7.0)
+//
+// id'ler lib/agents/registry.ts'deki GERÇEK agent adlarıyla birebir eşleşir
+// (bkz. app/agent-panel/page.tsx Office3DTab). Registry'de olmayan/henüz
+// eklenmemiş slotlar boş "YAKINDA" odası olarak kalır — sahte agent yok.
 
 export const OFFICE_LAYOUT: Array<{ id: string; position: [number, number, number] }> = [
-  { id: 'scholarship', position: [-4.5, 0,  5.5] }, // left front
-  { id: 'ielts',       position: [-6.5, 0,  1.0] }, // left mid
-  { id: 'routine',     position: [-5.5, 0, -3.5] }, // left back
-  { id: 'finance',     position: [ 4.5, 0,  5.5] }, // right front
-  { id: 'discover',    position: [ 6.5, 0,  1.0] }, // right mid
-  { id: 'secretary',   position: [ 5.5, 0, -3.5] }, // right back
-  { id: 'content',     position: [-2.5, 0, -7.0] }, // back left
-  { id: '__empty1__',  position: [ 0.0, 0, -8.0] }, // back center
-  { id: '__empty2__',  position: [ 2.5, 0, -7.0] }, // back right
+  { id: 'burs-toplu-arastirma', position: [-4.5, 0,  5.5] }, // left front
+  { id: 'ingilizce-planlayici', position: [-6.5, 0,  1.0] }, // left mid
+  { id: 'ingilizce-genel-plan', position: [-5.5, 0, -3.5] }, // left back
+  { id: 'kesif-arastirmaci',    position: [ 4.5, 0,  5.5] }, // right front
+  { id: 'burs-derinlestir',     position: [ 6.5, 0,  1.0] }, // right mid
+  { id: 'test-agent',           position: [ 5.5, 0, -3.5] }, // right back
+  { id: '__empty1__',           position: [-2.5, 0, -7.0] }, // back left
+  { id: '__empty2__',           position: [ 0.0, 0, -8.0] }, // back center
+  { id: '__empty3__',           position: [ 2.5, 0, -7.0] }, // back right
 ]
 
 const GOLD = '#c8a96e'
@@ -124,12 +128,14 @@ function AgentRoom({
 }) {
   const angle = roomAngle(position[0], position[2])
   const active  = agent.status === 'active'
+  const done    = agent.status === 'done'
   const stopped = agent.status === 'stopped'
-  const accent  = active ? agent.color : stopped ? '#3a1515' : '#141e28'
+  const DONE_COLOR = '#34d399' // emerald — RunBadge'deki "Tamam" rengiyle tutarlı
+  const accent  = active ? agent.color : done ? DONE_COLOR : stopped ? '#3a1515' : '#141e28'
   const c       = useMemo(() => new THREE.Color(accent), [accent])
   const accentC = useMemo(
-    () => new THREE.Color(active ? agent.color : stopped ? '#3a1515' : '#1a2535'),
-    [active, stopped, agent.color],
+    () => new THREE.Color(active ? agent.color : done ? DONE_COLOR : stopped ? '#3a1515' : '#1a2535'),
+    [active, done, stopped, agent.color],
   )
 
   const groupRef = useRef<THREE.Group>(null)

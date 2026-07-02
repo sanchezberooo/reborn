@@ -1,8 +1,12 @@
 import type { BetaToolUseBlock, BetaMessageParam, BetaToolResultBlockParam, BetaToolUnion } from '@anthropic-ai/sdk/resources/beta/messages/messages'
 import { anthropic, CLAUDE_MODEL, TOOLS, WEB_SEARCH_TOOL } from '@/lib/anthropic'
-import { buildSystemPrompt } from '@/lib/openai'
+import { buildSystemPrompt } from '@/lib/sanchez-prompt'
 import { serverExecuteTool } from '@/lib/agents/executor'
 import type { ModuleItem } from '@/lib/modules'
+import type { ChatEvent } from '@/lib/chat-events'
+
+// NDJSON akış protokolü: her satır tek bir ChatEvent JSON'ı (bkz. lib/chat-events.ts).
+// Gerçek token-bazlı streaming — istemci tarafı: components/chat/useSanchezChat.ts
 
 export async function POST(req: Request) {
   if (!process.env.ANTHROPIC_API_KEY) {
@@ -15,11 +19,8 @@ export async function POST(req: Request) {
     activeModule?: ModuleItem
   }
 
-  const { createClient } = await import('@supabase/supabase-js')
-  const adminClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const { getSupabaseAdmin } = await import('@/lib/supabase-admin')
+  const adminClient = getSupabaseAdmin()
 
   const profileResult = await adminClient.from('profiles').select('*').limit(1).single()
   const userId = profileResult.data?.id ?? ''
@@ -55,6 +56,7 @@ export async function POST(req: Request) {
   const readable = new ReadableStream({
     async start(controller) {
       const enc = new TextEncoder()
+      const send = (event: ChatEvent) => controller.enqueue(enc.encode(JSON.stringify(event) + '\n'))
 
       try {
         const currentHistory: BetaMessageParam[] = messages.map((m) => ({
@@ -63,7 +65,7 @@ export async function POST(req: Request) {
         }))
 
         while (true) {
-          const response = await anthropic.beta.messages.create({
+          const stream = anthropic.beta.messages.stream({
             model: CLAUDE_MODEL,
             system: systemPrompt,
             messages: currentHistory,
@@ -72,11 +74,19 @@ export async function POST(req: Request) {
             betas: ['web-search-2025-03-05'],
           })
 
-          for (const block of response.content) {
-            if (block.type === 'text' && block.text) {
-              controller.enqueue(enc.encode(block.text))
+          // Gerçek zamanlı token akışı + araç başlangıcı bildirimi
+          for await (const event of stream) {
+            if (event.type === 'content_block_start') {
+              const block = event.content_block
+              if (block.type === 'tool_use' || block.type === 'server_tool_use') {
+                send({ type: 'tool_start', name: block.name })
+              }
+            } else if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+              send({ type: 'text', text: event.delta.text })
             }
           }
+
+          const response = await stream.finalMessage()
 
           if (response.stop_reason === 'end_turn' || response.stop_reason === 'max_tokens') break
 
@@ -95,9 +105,11 @@ export async function POST(req: Request) {
                   void adminClient.from('agent_logs').insert({
                     agent_name: 'sanchez', action: tu.name, result: resultStr.slice(0, 500),
                   })
+                  send({ type: 'tool_end', name: tu.name, ok: true })
                   return { type: 'tool_result' as const, tool_use_id: tu.id, content: resultStr }
                 } catch (err) {
                   console.error(`[Reborn] tool ${tu.name} error:`, err)
+                  send({ type: 'tool_end', name: tu.name, ok: false })
                   return {
                     type: 'tool_result' as const,
                     tool_use_id: tu.id,
@@ -111,9 +123,11 @@ export async function POST(req: Request) {
             currentHistory.push({ role: 'user', content: toolResults })
           }
         }
+
+        send({ type: 'done' })
       } catch (err) {
         console.error('[Reborn] Claude error:', err)
-        controller.enqueue(enc.encode('Bir hata oluştu. Tekrar dene.'))
+        send({ type: 'error', message: 'Bir hata oluştu. Tekrar dene.' })
       } finally {
         controller.close()
       }
@@ -121,6 +135,6 @@ export async function POST(req: Request) {
   })
 
   return new Response(readable, {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8' },
   })
 }

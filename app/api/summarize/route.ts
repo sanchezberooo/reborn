@@ -1,4 +1,4 @@
-import { openai } from '@/lib/openai'
+import { openai } from '@/lib/openai-client'
 
 export async function POST(req: Request) {
   const { messages } = await req.json() as {
