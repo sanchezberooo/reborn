@@ -31,7 +31,7 @@ Her özellik/karar şu 5 filtreden geçmek zorundadır; geçemiyorsa Reborn'da y
 | `supabase/` | `migrations/` — esas kaynak (bkz. §5); `schema.sql` artık yalnızca tarihsel referans |
 | `docs/` | Vizyon, roadmap, denetim raporu (bkz. §7) |
 
-**Veri modeli (mevcut):** 17 tablo, tamamı tek-kullanıcı varsayımlı ve **modül-silolu** — `profiles`, `memories` (embedding YOK; retrieval = son 5 kayıt), `conversations` (mesajlar jsonb dizisi), `modules` (jsonb `data` çuvalı), `habits`, `journal_*`, `library`, `agent_runs/logs`, `essays` vb. `entities`/`links` çekirdeği henüz yok (Faz 1 işi). `messages` tablosu LEGACY — yazan kod yok.
+**Veri modeli (mevcut):** 17 silo tablo, tamamı tek-kullanıcı varsayımlı — `profiles`, `memories`, `conversations` (mesajlar jsonb dizisi), `modules` (jsonb `data` çuvalı), `habits`, `journal_*`, `library`, `agent_runs/logs`, `essays` vb. `messages` tablosu LEGACY — yazan kod yok. **Faz 1 çekirdeği CANLIDA** (migration `0001_unified_entity_core`, 2026-07-03): pgvector aktif (`extensions` şeması); `entities` (`type` CHECK'li: journal|goal|note|project|person|task|essay|habit|resource|event, `embedding vector(1024)` bge-m3, `source_table`+`source_id` köprüsü, HNSW cosine indeks), `links` (`kind`: semantic|user|wikilink, `label`, `strength` [0,1] yalnız semantic), `memories`'e eklenen `embedding`/`source_entity_id`/`source_conversation_id`/`confidence`/`reason` kolonları. Kod bu tablolara HENÜZ yazmıyor — köprü senkronu (lib/db.ts) ve embedding pipeline sonraki Faz 1 görevleri; retrieval hâlâ son 5 kayıt.
 
 **AI çağrı noktaları (tam envanter — başka yerde LLM çağrısı yok):** Üçü de `lib/ai` `getAIProvider()` üzerinden geçer; doğrudan SDK çağrısı yok.
 1. `app/api/chat/route.ts` — Sanchez sohbeti: `provider.stream()`, `while(true)` tool döngüsü (route'ta yaşar), 15 tool (`lib/ai/tools.ts`) + `web_search`. System prompt: `lib/sanchez-prompt.ts` `buildSystemPrompt()`.
@@ -42,11 +42,13 @@ Her özellik/karar şu 5 filtreden geçmek zorundadır; geçemiyorsa Reborn'da y
 
 **State:** Kütüphane yok; component-local `useState` + `window.dispatchEvent` olay otobüsü (`reborn:new-chat`, `reborn:modules-updated` vb.).
 
-## 4. Hedef Mimari (henüz yok — evrimleşiyoruz)
+## 4. Hedef Mimari (evrimleşiyoruz)
 
-Aşağıdakiler hedeftir, mevcut kod değildir. Sıfırdan yazım YOK; mevcut kod aşamalı evrimleşir.
+Sıfırdan yazım YOK; mevcut kod aşamalı evrimleşir. Aşağıda durumu belirtilmeyen maddeler hedeftir, mevcut kod değildir.
 
-- **Unified Entity Model:** Journal, hedef, not, proje, görev — hepsi tek `entities` çekirdeğinden türer; embedding'i ve `links`'i vardır (Faz 1).
+- **Unified Entity Model:** Şema CANLIDA — detay §3, kaynak `supabase/migrations/0001_unified_entity_core.sql`. Yeni entity tipi eklemek = yeni migration (CHECK listesi genişletilir). `memories.type`'ta CHECK bilinçli YOK (save_memory tool'u serbest değer yazıyor); kanonik taksonomi fact/preference/goal/pattern/emotion, kısıt FAZ AI'da gelir. Kalan Faz 1 işleri: köprü senkronu (lib/db.ts), lokal embedding pipeline (bge-m3), hibrit retrieval, hafıza görünürlüğü UI'ı.
+
+  **Köprü kararı (gerekçe):** `entities` bir üst-katman indeks olarak başlar ve zamanla esas kaynağa evrilir (strangler-fig). Mevcut silo tablolar bozulmaz: her kayıt `(source_table, source_id)` ile entities'te bir köprü satırıyla temsil edilir; köprü satırındaki title/content, embedding'in hesaplandığı türetilmiş metindir — arama indeksinin doğası gereği bir kopyadır (tsvector'ün kopya olması gibi), ikinci bir doğruluk kaynağı değildir; esas kaynak silo tablo kalır ve senkron tek veri kapısı `lib/db.ts`'te yazma anında yapılır. Yeni doğan içerik (Faz 2 goals, notes) `source_table` NULL ile doğrudan entities'te yaşar — orada esas kaynak entities'in kendisidir. Böylece iki uç da reddedilir: büyük-patlama taşıma (roadmap'in yasakladığı yeniden yazım) ve kalıcı çift-kaynak. Denetim raporu matrisindeki plan budur: çekirdek yanına kurulur, modüller teker teker taşınır, taşınan modülün köprü satırları native'e dönüşür ve silo tablosu emekli edilir.
 - **AIProvider soyutlaması:** `complete()` / `stream()` / `embed()` interface'i; `AnthropicProvider`, `LocalEmbeddingProvider` (bge-m3, Faz 1), `MockProvider` (deterministik senaryo fixture'ları — API'siz uçtan uca geliştirme). Dosya planı: denetim raporu §4.2'deki `lib/ai/` yapısı (`provider.ts`, `anthropic.ts`, `mock.ts`, `local-embedding.ts`, `index.ts`, `tools.ts`). Provider seçimi env ile: `AI_PROVIDER=mock|anthropic`.
 - **Memory pipeline:** Retrieval = semantik arama + link grafı + recency ağırlığı; memory write = konuşmadan yapılandırılmış çıkarım (gerçek davranışı FAZ AI'da).
 
