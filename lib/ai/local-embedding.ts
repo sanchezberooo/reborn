@@ -1,3 +1,4 @@
+import 'server-only'
 import path from 'node:path'
 import { env, pipeline } from '@huggingface/transformers'
 import type { AIProvider, AIProviderCapabilities, AIStreamEvent, AITurn } from './provider'

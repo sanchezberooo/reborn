@@ -24,10 +24,11 @@
 // ayrıca TTL süreç dışı yazmalara karşı emniyettir. Silinen entity bu sayede
 // bir daha retrieval'a çıkmaz (Faz 1 başarı kriteri).
 
+import 'server-only'
 import { getSupabaseAdmin } from '../supabase-admin'
 import { getLocalEmbeddingProvider } from './local-embedding'
 import { retrievalCacheVersion } from './retrieval-cache'
-import type { EntityType } from '../db'
+import type { EntityType } from '../db-server'
 
 const SNAPSHOT_TTL_MS = 60_000
 const RECENCY_WEIGHT = 0.08

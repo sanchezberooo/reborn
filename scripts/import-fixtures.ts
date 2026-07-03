@@ -30,7 +30,7 @@ async function main() {
   // Env, lib importlarından ÖNCE yüklenmeli (lib/supabase.ts modül yüklenirken
   // NEXT_PUBLIC_* okur) — bu yüzden lib modülleri aşağıda dinamik import edilir.
   loadEnvConfig(process.cwd())
-  const { createEntity, createLink } = await import('../lib/db')
+  const { createEntity, createLink } = await import('../lib/db-server')
   const { getSupabaseAdmin } = await import('../lib/supabase-admin')
   const supabase = getSupabaseAdmin()
 

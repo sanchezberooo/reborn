@@ -13,7 +13,7 @@
 //     Dolgu konuları bilinçli olarak test sorgusu temalarından (IELTS, burs,
 //     spor/antrenman, Reborn/vizyon) uzak seçildi.
 
-import type { EntityType } from '../lib/db'
+import type { EntityType } from '../lib/db-server'
 
 /** Fixture verisinin sahibi — sentinel uuid, gerçek profiles kaydı değil. */
 export const FIXTURE_USER_ID = '00000000-0000-4000-a000-000000000001'

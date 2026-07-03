@@ -14,10 +14,10 @@ const hasEnv = Boolean(
   process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY,
 )
 
-// lib/db.ts dinamik import edilir: modül zinciri (lib/supabase.ts) yüklenirken
-// env ister; env'siz ortamda suite'in skip yerine patlamasına yol açardı.
+// lib/db-server.ts dinamik import edilir: modül zinciri env ister;
+// env'siz ortamda suite'in skip yerine patlamasına yol açardı.
 async function dbApi() {
-  return import('../db')
+  return import('../db-server')
 }
 
 describe.skipIf(!hasEnv)('hybridRetrieve (canlı Supabase + gerçek bge-m3)', () => {
