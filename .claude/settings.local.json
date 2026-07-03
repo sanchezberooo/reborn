@@ -98,7 +98,27 @@
       "Bash(find app/office)",
       "Bash(node -e \"const d=JSON.parse\\(require\\('fs'\\).readFileSync\\(0,'utf8'\\)\\); console.log\\('agents:', d.map\\(a=>a.name\\).join\\(', '\\)\\)\")",
       "Bash(wc -c \"'\" \"'v'\" \"a.name\\).join\\('\" \"r.json\\(\\)\\)\" '`[${m.date}]')",
-      "Bash(rm -f -- \"'\" \"'v'\" \"a.name\\).join\\('\" \"r.json\\(\\)\\)\" '`[${m.date}]')"
+      "Bash(rm -f -- \"'\" \"'v'\" \"a.name\\).join\\('\" \"r.json\\(\\)\\)\" '`[${m.date}]')",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/next/package.json'\\).version\\)\")",
+      "PowerShell(npx tsc --noEmit)",
+      "PowerShell(npm run *)",
+      "PowerShell(taskkill *)",
+      "Bash(npm -v)",
+      "Bash(npm ls *)",
+      "Bash(npm test *)",
+      "Bash(npx eslint *)",
+      "Bash(where uvx *)",
+      "Bash(where npx *)",
+      "Bash(npm search *)",
+      "Bash(npm view *)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "mcp__obsidian__obsidian_search_notes",
+      "mcp__obsidian__obsidian_list_notes",
+      "Bash(cmd //c \"dir docs /AL\")",
+      "Bash(fsutil reparsepoint *)",
+      "mcp__obsidian__obsidian_write_note",
+      "Bash(file \"{,+\")",
+      "Bash(git diff *)"
     ]
   }
 }

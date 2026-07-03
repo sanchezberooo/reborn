@@ -1,9 +1,4 @@
 -- ============================================================
--- ARTIK KAYNAK DEĞİL — supabase/migrations/ esastır.
--- Bu dosya yalnızca 0000_baseline.sql'in oluşturulduğu andaki tarihsel
--- referanstır; yeni şema değişiklikleri buraya değil migrations/ altına
--- yeni bir dosya olarak yazılır (bkz. supabase/README-migrations.md).
--- ============================================================
 -- Reborn — Supabase Schema
 -- Supabase Dashboard > SQL Editor'da çalıştır
 -- ============================================================
