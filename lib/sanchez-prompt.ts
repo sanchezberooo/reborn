@@ -82,11 +82,28 @@ roadmap → milestones: {title, date, status, notes, type}
 discover → books: {title, author, status, notes}
 discover → courses: {name, platform, status, url}`
 
+// İlk tanışma (roadmap ilke 14: klasik onboarding yok, ilk deneyim Sanchez'le
+// tanışma sohbetidir). Marker hem MockProvider'ın senaryo seçiminde (deterministik
+// tetik) hem gerçek AI bağlanınca davranış talimatı olarak kullanılır — provider
+// değişse de akış aynı kalır.
+export const ONBOARDING_MARKER = '[ONBOARDING]'
+
+const ONBOARDING_SECTION = `
+
+─── ${ONBOARDING_MARKER} İlk tanışma ───
+
+Bu kullanıcının sistemde henüz hiç verisi yok — bu ilk tanışma sohbeti.
+Akış: kendini kısaca tanıt; "kim olmak istiyorsun?" sorusunu sor; cevabından
+somut bir İLK HEDEF taslağı çıkar ve onayına sun; onaylarsa save_goal aracıyla
+hedefi gerçekten kaydet ve sohbeti bu hedefle kapat. Hedef oluşmadan tanışma
+bitmiş sayılmaz.`
+
 export function buildSystemPrompt(
   profile: BeroProfile,
   memories: Memory[],
   lastConversation?: { role: string; content: string }[],
-  activeModule?: ModuleItem
+  activeModule?: ModuleItem,
+  onboarding?: boolean
 ): string {
   const now = new Date()
   const daysTo = (target: Date) => Math.max(0, Math.ceil((target.getTime() - now.getTime()) / 86400000))
@@ -142,6 +159,7 @@ ${JSON.stringify(activeModule.data, null, 2)}`
     memoriesSection +
     lastConvSection +
     activeModuleSection +
-    MODULE_SCHEMAS
+    MODULE_SCHEMAS +
+    (onboarding ? ONBOARDING_SECTION : '')
   )
 }

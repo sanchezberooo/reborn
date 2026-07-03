@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { useSanchezChat } from './useSanchezChat'
 import MessageBubble from './Message'
 
@@ -10,11 +10,29 @@ const SUGGESTIONS = [
   'Burs başvuru takvimini güncelle',
 ]
 
+// Onboarding (roadmap ilke 14): klasik kurulum ekranı yok — yeni kullanıcının
+// boş sohbet ekranı tanışma davetine dönüşür. Senaryonun kendisi sunucuda
+// tetiklenir (api/chat system marker'ı); burada yalnızca giriş metni değişir.
+const ONBOARDING_SUGGESTIONS = ['Merhaba Sanchez, tanışalım']
+
 export default function ChatInterface() {
   const { messages, input, setInput, loading, dataLoading, toolStatus, send } = useSanchezChat()
+  const [onboarding, setOnboarding] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const isEmpty = messages.length === 0
+
+  // Boş ekrana her dönüşte (ilk açılış, yeni sohbet) durumu tazele — ilk goal
+  // kaydedildiği anda sunucu false döndürür ve davet bir daha görünmez.
+  useEffect(() => {
+    if (!isEmpty) return
+    fetch('/api/onboarding')
+      .then((r) => r.json())
+      .then((d) => setOnboarding(Boolean(d.onboarding)))
+      .catch(() => setOnboarding(false))
+  }, [isEmpty])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -56,8 +74,6 @@ export default function ChatInterface() {
     )
   }
 
-  const isEmpty = messages.length === 0
-
   return (
     <div className="flex flex-col h-full bg-background">
 
@@ -67,13 +83,19 @@ export default function ChatInterface() {
           <div className="flex flex-col items-center justify-center h-full gap-6 px-6">
             <div className="flex flex-col items-center gap-3">
               <div className="text-center">
-                <p className="font-display text-foreground text-2xl font-semibold leading-snug">Seni görmek güzel, Bero.</p>
-                <p className="text-muted text-sm mt-2">Ne konuşmak istiyorsun?</p>
+                <p className="font-display text-foreground text-2xl font-semibold leading-snug">
+                  {onboarding ? 'Hoş geldin. Ben Sanchez.' : 'Seni görmek güzel, Bero.'}
+                </p>
+                <p className="text-muted text-sm mt-2">
+                  {onboarding
+                    ? 'Kurulum ekranı yok — tanışarak başlıyoruz.'
+                    : 'Ne konuşmak istiyorsun?'}
+                </p>
               </div>
             </div>
 
             <div className="flex flex-col gap-2 w-full max-w-lg">
-              {SUGGESTIONS.map((s) => (
+              {(onboarding ? ONBOARDING_SUGGESTIONS : SUGGESTIONS).map((s) => (
                 <button
                   key={s}
                   onClick={() => pickSuggestion(s)}

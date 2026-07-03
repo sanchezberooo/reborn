@@ -18,6 +18,7 @@ const TOOL_STATUS_LABELS: Record<string, string> = {
   read_conversations:  'geçmiş sohbetleri okuyor',
   toggle_habit:        'alışkanlık işaretliyor',
   save_memory:         'hafızaya kaydediyor',
+  save_goal:           'hedefi kaydediyor',
   update_profile:      'profili güncelliyor',
   save_to_library:     'kütüphaneye kaydediyor',
   log_agent_action:    'kaydı işliyor',

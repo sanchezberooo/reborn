@@ -85,6 +85,20 @@ export const TOOLS: AIToolDef[] = [
     },
   },
   {
+    name: 'save_goal',
+    description:
+      'Yeni bir hedef (goal) yaratır — Faz 2 goal sistemi: native entity + goals uzantısı, embedding sunucuda. Onboarding tanışma sohbetinin onaylanan hedefi de bununla yazılır.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title:       { type: 'string', description: 'Hedef başlığı' },
+        description: { type: 'string', description: 'Hedefin açıklaması (opsiyonel)' },
+        target_date: { type: 'string', description: 'Hedef tarihi YYYY-MM-DD (opsiyonel)' },
+      },
+      required: ['title'],
+    },
+  },
+  {
     name: 'update_profile',
     description: "Bero'nun profilindeki bir değeri user_profile tablosunda günceller.",
     inputSchema: {

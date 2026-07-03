@@ -5,6 +5,7 @@ import type {
   AIStreamEvent,
   AITurn,
 } from './provider'
+import { ONBOARDING_MARKER } from '../sanchez-prompt'
 
 // MockProvider v1 — deterministik senaryo fixture'ları. API key'siz ve bakiyesiz
 // geliştirme/test için: streaming, tool durum göstergeleri, hata toleransı ve
@@ -17,6 +18,15 @@ import type {
 //   'hafıza' veya 'hatırla' → gerçek read_memories tool turu ister; sonuç dönünce
 //                             ikinci turda cevap verir (tool döngüsü testi)
 //   diğer her şey         → normal sohbet cevabı
+//
+// İSTİSNA — onboarding (Faz 2, Görev 3): system prompt ONBOARDING_MARKER
+// içeriyorsa senaryo seçimi kelimeye değil KULLANICI MESAJI SAYISINA bağlanır
+// (çok turlu, deterministik tanışma akışı — roadmap ilke 14):
+//   1. kullanıcı mesajı → Sanchez kendini tanıtır + "kim olmak istiyorsun?" sorar
+//   2. kullanıcı mesajı → cevaptan sabit varsayımla hedef taslağı çıkarır, onaya sunar
+//   3+ ve onay kelimesi → GERÇEK save_goal tool turu ister (executor saveGoal'u
+//                          gerçekten çalıştırır); sonuç dönünce kapanış mesajı
+//   3+ ve onay yok      → mesaj yeni cevap sayılır, taslak onunla yeniden sunulur
 //
 // complete() için: system prompt 'özetle' içeriyorsa sabit özet fixture'ı,
 // aksi halde JSON fixture (ajanların JSON-only çıktı sözleşmesi için) döner.
@@ -39,14 +49,32 @@ function hasToolResults(req: AIRequest): boolean {
   return req.messages.some((m) => m.role === 'tool_results')
 }
 
-type Scenario = 'error' | 'web_search' | 'memory' | 'chat'
+/** Kullanıcı mesajlarını sırayla döndürür — onboarding tur sayacı ve
+ *  "kim olmak istiyorsun" cevabının yakalanması için. */
+function userMessages(req: AIRequest): string[] {
+  const out: string[] = []
+  for (const m of req.messages) if (m.role === 'user') out.push(m.content)
+  return out
+}
+
+type Scenario = 'onboarding' | 'error' | 'web_search' | 'memory' | 'chat'
 
 function pickScenario(req: AIRequest): Scenario {
+  // Onboarding system marker'ı kelime senaryolarından ÖNCE gelir: tanışma
+  // sohbetinde geçen "web" ya da "hata" kelimesi akışı raydan çıkarmasın.
+  if (req.system.includes(ONBOARDING_MARKER)) return 'onboarding'
   const text = lastUserText(req)
   if (text.includes('hata')) return 'error'
   if (text.includes('araştır') || text.includes('web')) return 'web_search'
   if (text.includes('hafıza') || text.includes('hatırla')) return 'memory'
   return 'chat'
+}
+
+const APPROVAL_WORDS = ['evet', 'onay', 'kabul', 'tamam', 'olur']
+
+function isApproval(text: string): boolean {
+  const t = text.toLowerCase()
+  return APPROVAL_WORDS.some((w) => t.includes(w))
 }
 
 // ─── Fixture metinleri ──────────────────────────────────────────────────────
@@ -69,6 +97,32 @@ const MEMORY_RESPONSE =
   '[MOCK] Hafıza kayıtlarına baktım — read_memories aracı gerçekten çalıştı ve ' +
   'sonucu bana ulaştı (tool döngüsü sağlam). Kayıtların yorumu gerçek üretken ' +
   'AI bağlanınca yapılacak; bu cevap deterministik bir fixture.'
+
+// ── Onboarding fixture'ları ──
+// Hedef başlığı sabittir (mock'ta gerçek çıkarım yok); açıklama kullanıcının
+// "kim olmak istiyorsun" cevabının kendisidir — deterministik ama kişisel:
+// yazılan veri gerçekten kullanıcıdan gelir, tool yazımı gerçektir.
+
+export const ONBOARDING_GOAL_TITLE = 'Olmak istediğim kişiye ilk adım'
+
+const ONBOARDING_INTRO =
+  '[MOCK] Merhaba. Ben Sanchez — Reborn\'un içinde yaşıyorum ve buradaki tek muhatabın benim. ' +
+  'Klasik bir kurulum sihirbazı yok; tanışarak başlıyoruz. ' +
+  'Tek bir sorum var, acele etme: kim olmak istiyorsun?'
+
+const ONBOARDING_PROPOSAL_PREFIX =
+  '[MOCK] Anladım. Söylediklerinden ilk hedefini şöyle çıkarıyorum:\n\n' +
+  `**${ONBOARDING_GOAL_TITLE}**\n> `
+
+const ONBOARDING_PROPOSAL_SUFFIX =
+  '\n\nBunu ilk hedefin olarak kaydedeyim mi? Onaylıyorsan "evet" yaz; ' +
+  'düzeltmek istersen yeniden anlat.'
+
+const ONBOARDING_SAVING = 'Hedefini kaydediyorum... '
+
+const ONBOARDING_DONE =
+  '[MOCK] Kaydettim — ilk hedefin artık Reborn\'da yaşıyor ve hafızama bağlandı. ' +
+  'Tanışma bu kadar; bundan sonrası birlikte inşa. Bu hedefi konuşmaya her zaman dönebiliriz.'
 
 const SUMMARY_FIXTURE =
   '[MOCK] Sohbet özeti: Bero Sanchez ile konuştu; bu özet MockProvider tarafından üretilen sabit bir fixture\'dır.'
@@ -99,6 +153,11 @@ export class MockProvider implements AIProvider {
 
   async *stream(req: AIRequest): AsyncIterable<AIStreamEvent> {
     const scenario = pickScenario(req)
+
+    if (scenario === 'onboarding') {
+      yield* this.streamOnboarding(req)
+      return
+    }
 
     if (scenario === 'error') {
       yield* this.streamText('[MOCK] Bir şeyler ters gitmek üzere')
@@ -132,6 +191,53 @@ export class MockProvider implements AIProvider {
     const text = scenario === 'memory' ? MEMORY_RESPONSE : CHAT_RESPONSE
     yield* this.streamText(text)
     yield { type: 'done', turn: { stopReason: 'end_turn', text, toolUses: [] } }
+  }
+
+  /** Onboarding tanışma akışı — tur sayısı kullanıcı mesajı sayısıyla belirlenir
+   *  (dosya başındaki senaryo tablosu). Tek gerçek yan etki: onay turundaki
+   *  save_goal tool çağrısı — executor bunu gerçekten çalıştırır, hedef DB'ye yazılır. */
+  private async *streamOnboarding(req: AIRequest): AsyncIterable<AIStreamEvent> {
+    const users = userMessages(req)
+    const last = users[users.length - 1] ?? ''
+    // "Kim olmak istiyorsun" cevabı: ilk selamlama hariç, onay kelimesi olmayan
+    // SON kullanıcı mesajı (kullanıcı taslağı reddedip yeniden anlatabilir).
+    const answer =
+      [...users.slice(1)].reverse().find((m) => !isApproval(m)) ?? users[1] ?? ''
+
+    if (users.length <= 1) {
+      yield* this.streamText(ONBOARDING_INTRO)
+      yield { type: 'done', turn: { stopReason: 'end_turn', text: ONBOARDING_INTRO, toolUses: [] } }
+      return
+    }
+
+    if (users.length >= 3 && isApproval(last)) {
+      if (!hasToolResults(req)) {
+        // Onay turu: gerçek save_goal çağrısı iste — metin mock, yazma gerçek.
+        yield* this.streamText(ONBOARDING_SAVING)
+        yield { type: 'tool_start', name: 'save_goal' }
+        yield {
+          type: 'done',
+          turn: {
+            stopReason: 'tool_use',
+            text: ONBOARDING_SAVING,
+            toolUses: [{
+              id: 'mock-onboarding-goal',
+              name: 'save_goal',
+              input: { title: ONBOARDING_GOAL_TITLE, description: answer },
+            }],
+          },
+        }
+        return
+      }
+      yield* this.streamText(ONBOARDING_DONE)
+      yield { type: 'done', turn: { stopReason: 'end_turn', text: ONBOARDING_DONE, toolUses: [] } }
+      return
+    }
+
+    // 2. tur ya da 3+ turda onay gelmedi (yeni cevap): taslağı onaya sun.
+    const proposal = ONBOARDING_PROPOSAL_PREFIX + answer + ONBOARDING_PROPOSAL_SUFFIX
+    yield* this.streamText(proposal)
+    yield { type: 'done', turn: { stopReason: 'end_turn', text: proposal, toolUses: [] } }
   }
 
   /** Metni kelime kelime, küçük gecikmelerle akıtır — gerçekçi token akışı taklidi. */

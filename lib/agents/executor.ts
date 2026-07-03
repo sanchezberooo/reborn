@@ -93,6 +93,20 @@ export async function serverExecuteTool(
       return { ok: true }
     }
 
+    case 'save_goal': {
+      const { title, description, target_date } = input as {
+        title: string; description?: string; target_date?: string
+      }
+      // saveGoal embedding'i lokal (bge-m3) hesaplar — üretken AI çağrısı yok.
+      const { saveGoal } = await import('@/lib/db-server')
+      const goal = await saveGoal(userId, {
+        title,
+        description: description ?? null,
+        targetDate: target_date ?? null,
+      })
+      return { ok: true, goal_id: goal.id, title: goal.title, status: goal.status }
+    }
+
     case 'update_profile': {
       const { key, value } = input as { key: string; value: string }
       const { error } = await supabase.from('user_profile')

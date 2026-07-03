@@ -160,6 +160,23 @@ export async function resolveSingleUserId(): Promise<string> {
   return data.id as string
 }
 
+/**
+ * Kullanıcı "yeni" mi — onboarding tanışma sohbeti tetiklenmeli mi? (Faz 2,
+ * Görev 3; roadmap ilke 14.) Ölçüt: entities çekirdeğinde tek kayıt bile yok.
+ * Journal, goal, not — Faz 1 sonrası tüm içerik entities'e aktığından "sıfır
+ * veri"nin tek doğru kapısı burasıdır; onboarding sonunda save_goal ile ilk
+ * entity doğar ve bu bayrak kendiliğinden söner.
+ */
+export async function needsOnboarding(userId: string): Promise<boolean> {
+  const { supabase } = await entityDeps()
+  const { count, error } = await supabase
+    .from('entities')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+  if (error) throw error
+  return (count ?? 0) === 0
+}
+
 /** Köprü satırının türetilmiş metni: serbest yazı + cevaplı sorular + skorlar.
  *  Boş alanlar atlanır ki embedding gürültü yerine gerçek içeriği temsil etsin. */
 function deriveJournalEntityText(entry: JournalEntryData): { title: string; content: string } {

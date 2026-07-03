@@ -49,7 +49,13 @@ export async function POST(req: Request) {
 
   const memories = memoriesResult.data ?? []
 
-  const systemPrompt = buildSystemPrompt(profile, memories, lastConversation, activeModule)
+  // Yeni kullanıcı (entities çekirdeği boş) → tanışma sohbeti bölümü system
+  // prompt'a eklenir; MockProvider bu marker'la onboarding senaryosuna girer
+  // (roadmap ilke 14). Sorgu hatası onboarding'i tetiklemez, normal akışa düşer.
+  const { needsOnboarding } = await import('@/lib/db-server')
+  const onboarding = userId ? await needsOnboarding(userId).catch(() => false) : false
+
+  const systemPrompt = buildSystemPrompt(profile, memories, lastConversation, activeModule, onboarding)
   const provider = getAIProvider()
 
   const readable = new ReadableStream({
