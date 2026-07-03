@@ -45,6 +45,9 @@ next-env.d.ts
 # local tool data
 ruvector.db
 
+# lokal embedding model cache (bge-m3 ONNX, ~570 MB — lib/ai/local-embedding.ts indirir)
+/.cache/
+
 # kişisel Obsidian kasası — repo dışına taşınmalı, asla commit edilmemeli
 /reborn kasa/
 
