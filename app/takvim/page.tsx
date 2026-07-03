@@ -5,7 +5,14 @@ import Link from 'next/link'
 import FullCalendar from '@fullcalendar/react'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import interactionPlugin from '@fullcalendar/interaction'
-import { supabase } from '@/lib/supabase'
+import {
+  dbLoadCalendarEvents,
+  dbCreateCalendarEvent,
+  dbUpdateCalendarEventTime,
+  dbUpdateCalendarEventMeta,
+  dbDeleteCalendarEvent,
+} from '@/lib/db'
+import type { CalendarEvent } from '@/lib/db'
 
 // ─── categories ───────────────────────────────────────────────────────────────
 
@@ -21,14 +28,7 @@ type Category = keyof typeof CATEGORIES
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
-interface DBEvent {
-  id: string
-  title: string
-  description: string | null
-  start_time: string
-  end_time: string
-  category: string | null
-}
+type DBEvent = CalendarEvent
 
 interface FcEvent {
   id: string
@@ -91,12 +91,8 @@ export default function TakvimPage() {
   useEffect(() => { setMounted(true) }, [])
 
   const loadEvents = useCallback(async (start: string, end: string) => {
-    const { data } = await supabase
-      .from('calendar_events')
-      .select('*')
-      .gte('start_time', start)
-      .lt('start_time', end)
-    if (data) setEvents((data as DBEvent[]).map(toFcEvent))
+    const data = await dbLoadCalendarEvents(start, end)
+    if (data) setEvents(data.map(toFcEvent))
   }, [])
 
   // ── handlers ────────────────────────────────────────────────────────────────
@@ -128,19 +124,13 @@ export default function TakvimPage() {
   async function handleEventDrop(arg: {
     event: { id: string; startStr: string; endStr: string }
   }) {
-    await supabase
-      .from('calendar_events')
-      .update({ start_time: arg.event.startStr, end_time: arg.event.endStr })
-      .eq('id', arg.event.id)
+    await dbUpdateCalendarEventTime(arg.event.id, arg.event.startStr, arg.event.endStr)
   }
 
   async function handleEventResize(arg: {
     event: { id: string; startStr: string; endStr: string }
   }) {
-    await supabase
-      .from('calendar_events')
-      .update({ start_time: arg.event.startStr, end_time: arg.event.endStr })
-      .eq('id', arg.event.id)
+    await dbUpdateCalendarEventTime(arg.event.id, arg.event.startStr, arg.event.endStr)
   }
 
   // ── dialog save / delete ─────────────────────────────────────────────────
@@ -150,23 +140,20 @@ export default function TakvimPage() {
     const color = colorOf(dialog.category)
 
     if (dialog.mode === 'create') {
-      const { data } = await supabase
-        .from('calendar_events')
-        .insert({
-          title: dialog.title,
-          description: dialog.description || null,
-          start_time: dialog.start,
-          end_time: dialog.end,
-          category: dialog.category,
-        })
-        .select()
-        .single()
-      if (data) setEvents((prev) => [...prev, toFcEvent(data as DBEvent)])
+      const data = await dbCreateCalendarEvent({
+        title: dialog.title,
+        description: dialog.description || null,
+        start_time: dialog.start,
+        end_time: dialog.end,
+        category: dialog.category,
+      })
+      if (data) setEvents((prev) => [...prev, toFcEvent(data)])
     } else {
-      await supabase
-        .from('calendar_events')
-        .update({ title: dialog.title, description: dialog.description || null, category: dialog.category })
-        .eq('id', dialog.eventId!)
+      await dbUpdateCalendarEventMeta(dialog.eventId!, {
+        title: dialog.title,
+        description: dialog.description || null,
+        category: dialog.category,
+      })
       setEvents((prev) =>
         prev.map((e) =>
           e.id === dialog.eventId
@@ -187,7 +174,7 @@ export default function TakvimPage() {
 
   async function deleteEvent() {
     if (!dialog.eventId) return
-    await supabase.from('calendar_events').delete().eq('id', dialog.eventId)
+    await dbDeleteCalendarEvent(dialog.eventId)
     setEvents((prev) => prev.filter((e) => e.id !== dialog.eventId))
     setDialog(EMPTY)
   }

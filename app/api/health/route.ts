@@ -24,7 +24,7 @@ export async function GET() {
   // ─── Table checks ──────────────────────────────────────────────────────────
   const tables: Record<string, unknown> = {}
 
-  for (const table of ['profiles', 'memories', 'conversations', 'modules', 'messages']) {
+  for (const table of ['profiles', 'memories', 'conversations', 'modules']) {
     const { data, error, status } = await supabase
       .from(table)
       .select('*')

@@ -1,4 +1,3 @@
-import EnglishModule from '@/components/modules/EnglishModule'
 import GenericModule from '@/components/modules/GenericModule'
 
 export default async function Page({
@@ -8,10 +7,5 @@ export default async function Page({
 }) {
   const { id } = await params
 
-  switch (id) {
-    case 'english':
-      return <EnglishModule moduleId={id} />
-    default:
-      return <GenericModule moduleId={id} />
-  }
+  return <GenericModule moduleId={id} />
 }

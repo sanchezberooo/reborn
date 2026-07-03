@@ -2,7 +2,6 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react'
 import type { Message } from '@/lib/types'
-import type { ActionType } from '@/lib/modules'
 import {
   dbSaveMemory,
   dbSaveConversation,
@@ -23,45 +22,7 @@ function randomId() {
   return Math.random().toString(36).slice(2, 9)
 }
 
-function cleanResponse(text: string): string {
-  return text.replace(/<REBORN_ACTION>[\s\S]*?<\/REBORN_ACTION>/g, '').trim()
-}
-
-function stripAction(raw: string): string {
-  let s = raw
-    .replace(/<REBORN_ACTION>[\s\S]*?<\/REBORN_ACTION>/g, '')
-    .replace(/<REBORN_ACTION>[\s\S]*$/, '')
-  const TAG = '<REBORN_ACTION>'
-  for (let len = TAG.length - 1; len >= 1; len--) {
-    if (s.endsWith(TAG.slice(0, len))) {
-      s = s.slice(0, s.length - len)
-      break
-    }
-  }
-  return s.trim()
-}
-
-const ACTION_LABELS: Record<string, string> = {
-  CREATE_MODULE:      '✅ Modül oluşturuldu',
-  DELETE_MODULE:      '− Modül silindi',
-  REMOVE_MODULE:      '− Modül silindi',
-  UPDATE_MODULE_META: '✎ Modül düzenlendi',
-  REORDER_MODULES:    '↕ Sıra güncellendi',
-  UPDATE_MODULE:      '✎ Güncellendi',
-  ADD_FIELD:          '+ Alan eklendi',
-  UPDATE_FIELD:       '✎ Alan güncellendi',
-  ADD_ITEM_TO_FIELD:  '+ Eklendi',
-  APPEND_TO_FIELD:    '+ Kayıt eklendi',
-  REMOVE_ITEM:        '− Silindi',
-  CLEAR_FIELD:        '🗑 Temizlendi',
-}
-
-export interface UseSanchezChatOptions {
-  /** UI bildirimi (toast vb.) göstermek için opsiyonel callback. Verilmezse sessiz çalışır. */
-  notify?: (text: string) => void
-}
-
-export function useSanchezChat({ notify }: UseSanchezChatOptions = {}) {
+export function useSanchezChat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -73,8 +34,6 @@ export function useSanchezChat({ notify }: UseSanchezChatOptions = {}) {
 
   const conversationIdRef = useRef<string | null>(null)
   const newChatRef = useRef<() => void>(() => {})
-  const notifyRef = useRef(notify)
-  notifyRef.current = notify
 
   useEffect(() => {
     async function load() {
@@ -208,7 +167,7 @@ export function useSanchezChat({ notify }: UseSanchezChatOptions = {}) {
 
           if (event.type === 'text') {
             full += event.text
-            setMessages((p) => p.map((m) => m.id === aId ? { ...m, content: stripAction(full) } : m))
+            setMessages((p) => p.map((m) => m.id === aId ? { ...m, content: full } : m))
           } else if (event.type === 'tool_start') {
             setToolStatus(toolStatusLabel(event.name))
           } else if (event.type === 'tool_end') {
@@ -225,40 +184,14 @@ export function useSanchezChat({ notify }: UseSanchezChatOptions = {}) {
         return
       }
 
-      // 1. Execute all actions + get clean display text
-      const clean = cleanResponse(full)
-
-      // 2. Update display — no tags
-      setMessages((p) => p.map((m) => m.id === aId ? { ...m, content: clean } : m))
-
-      // 3. Supabase'e kaydet + bildirim
-      const actionsToRun: ActionType[] = []
-      const syncRegex = /<REBORN_ACTION>([\s\S]*?)<\/REBORN_ACTION>/g
-      let syncMatch
-      while ((syncMatch = syncRegex.exec(full)) !== null) {
-        try {
-          const action = JSON.parse(syncMatch[1]) as ActionType
-          notifyRef.current?.(ACTION_LABELS[action.type] ?? 'Kaydedildi')
-          actionsToRun.push(action)
-        } catch (err) {
-          console.error('[Reborn] action parse error:', err)
-        }
-      }
-      if (actionsToRun.length > 0) {
-        const actionRes = await fetch('/api/action', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ actions: actionsToRun }),
-        }).catch(() => null)
-        if (!actionRes?.ok) notifyRef.current?.('⚠ Bulut kaydı başarısız')
-      }
+      // Sanchez'in tool çağrıları (update_module vb.) sunucu tarafında zaten
+      // uygulandı — burada yalnızca ilgili UI'ları tazelemek için bildiriyoruz.
       window.dispatchEvent(new CustomEvent('reborn:modules-updated'))
 
-      // 4. Save conversation
       const completedMessages: Message[] = [
         ...messages,
         userMsg,
-        { id: aId, role: 'assistant', content: clean, timestamp: new Date() },
+        { id: aId, role: 'assistant', content: full, timestamp: new Date() },
       ]
       await finalizeMessage(sessionId, completedMessages)
     } catch (err) {

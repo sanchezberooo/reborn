@@ -1,12 +1,8 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useRef, useEffect } from 'react'
 import { useSanchezChat } from './useSanchezChat'
 import MessageBubble from './Message'
-
-function randomId() {
-  return Math.random().toString(36).slice(2, 9)
-}
 
 const SUGGESTIONS = [
   'Bugün ne yapmalıyım?',
@@ -15,15 +11,7 @@ const SUGGESTIONS = [
 ]
 
 export default function ChatInterface() {
-  const [toasts, setToasts] = useState<{ id: string; text: string }[]>([])
-
-  function showToast(text: string) {
-    const id = randomId()
-    setToasts((p) => [...p, { id, text }])
-    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3000)
-  }
-
-  const { messages, input, setInput, loading, dataLoading, toolStatus, send } = useSanchezChat({ notify: showToast })
+  const { messages, input, setInput, loading, dataLoading, toolStatus, send } = useSanchezChat()
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -148,18 +136,6 @@ export default function ChatInterface() {
             Enter — gönder · Shift+Enter — yeni satır
           </p>
         </div>
-      </div>
-
-      {/* Toasts */}
-      <div className="fixed bottom-24 right-5 flex flex-col gap-2 pointer-events-none z-50">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className="bg-surface border border-gold/25 text-gold text-xs px-3 py-2 rounded-lg shadow-xl"
-          >
-            {t.text}
-          </div>
-        ))}
       </div>
     </div>
   )

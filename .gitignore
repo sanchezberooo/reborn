@@ -44,3 +44,9 @@ next-env.d.ts
 
 # local tool data
 ruvector.db
+
+# kişisel Obsidian kasası — repo dışına taşınmalı, asla commit edilmemeli
+/reborn kasa/
+
+# Windows klasör meta dosyaları
+desktop.ini

@@ -181,15 +181,3 @@ export function migrateModule(module: ModuleItem): ModuleItem {
 export function migrateModules(modules: ModuleItem[]): ModuleItem[] {
   return modules.map(migrateModule)
 }
-
-export function parseAction(text: string): { clean: string; action: ActionType | null } {
-  const match = text.match(/<REBORN_ACTION>([\s\S]*?)<\/REBORN_ACTION>/)
-  if (!match) return { clean: text, action: null }
-  try {
-    const action = JSON.parse(match[1]) as ActionType
-    const clean = text.replace(/<REBORN_ACTION>[\s\S]*?<\/REBORN_ACTION>/, '').trim()
-    return { clean, action }
-  } catch {
-    return { clean: text.replace(/<REBORN_ACTION>[\s\S]*?<\/REBORN_ACTION>/, '').trim(), action: null }
-  }
-}

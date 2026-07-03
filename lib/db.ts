@@ -634,6 +634,90 @@ export async function dbSaveEssayVersion(essayId: string, content: string): Prom
   return data as EssayVersion
 }
 
+// ─── Calendar Events ──────────────────────────────────────────────────────────
+// calendar_events tablosunda user_id kolonu yok (bkz. faz0-denetim-raporu.md §1.3) —
+// bu yüzden diğer db.ts fonksiyonlarının aksine uid() filtresi uygulanmıyor.
+
+export interface CalendarEvent {
+  id: string
+  title: string
+  description: string | null
+  start_time: string
+  end_time: string
+  category: string | null
+}
+
+export async function dbLoadCalendarEvents(start: string, end: string): Promise<CalendarEvent[] | null> {
+  const { data } = await db()
+    .from('calendar_events')
+    .select('*')
+    .gte('start_time', start)
+    .lt('start_time', end)
+  return (data as CalendarEvent[] | null) ?? null
+}
+
+export async function dbCreateCalendarEvent(input: {
+  title: string
+  description: string | null
+  start_time: string
+  end_time: string
+  category: string
+}): Promise<CalendarEvent | null> {
+  const { data } = await db()
+    .from('calendar_events')
+    .insert(input)
+    .select()
+    .single()
+  return (data as CalendarEvent | null) ?? null
+}
+
+export async function dbUpdateCalendarEventTime(id: string, startTime: string, endTime: string): Promise<void> {
+  await db()
+    .from('calendar_events')
+    .update({ start_time: startTime, end_time: endTime })
+    .eq('id', id)
+}
+
+export async function dbUpdateCalendarEventMeta(
+  id: string,
+  patch: { title: string; description: string | null; category: string }
+): Promise<void> {
+  await db().from('calendar_events').update(patch).eq('id', id)
+}
+
+export async function dbDeleteCalendarEvent(id: string): Promise<void> {
+  await db().from('calendar_events').delete().eq('id', id)
+}
+
+// ─── Notion Sandbox (block_pages) ───────────────────────────────────────────────
+// Tek deneysel sayfa: en son güncellenen block_pages satırı. user_id kolonu yok.
+
+export async function dbLoadLatestBlockPage(): Promise<{ id: string; content: unknown } | null> {
+  const { data } = await db()
+    .from('block_pages')
+    .select('id, content')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data ? { id: data.id as string, content: data.content } : null
+}
+
+export async function dbUpdateBlockPage(id: string, content: unknown): Promise<void> {
+  await db()
+    .from('block_pages')
+    .update({ content, updated_at: new Date().toISOString() })
+    .eq('id', id)
+}
+
+export async function dbCreateBlockPage(content: unknown): Promise<string | null> {
+  const { data } = await db()
+    .from('block_pages')
+    .insert({ content })
+    .select('id')
+    .single()
+  return (data?.id as string) ?? null
+}
+
 export async function dbLoadRecentJournalEntries(limit = 5): Promise<JournalEntry[]> {
   const userId = await uid()
   const { data, error } = await db()

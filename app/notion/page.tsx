@@ -6,7 +6,7 @@ import { useCreateBlockNote } from '@blocknote/react'
 import { BlockNoteView } from '@blocknote/shadcn'
 import '@blocknote/core/fonts/inter.css'
 import '@blocknote/shadcn/style.css'
-import { supabase } from '@/lib/supabase'
+import { dbLoadLatestBlockPage, dbUpdateBlockPage, dbCreateBlockPage } from '@/lib/db'
 import type { Block } from '@blocknote/core'
 
 // ─── editor (mounted only after content is loaded) ────────────────────────────
@@ -30,17 +30,10 @@ function NotionEditor({
     setSaving(true)
     try {
       if (pageIdRef.current) {
-        await supabase
-          .from('block_pages')
-          .update({ content: blocks, updated_at: new Date().toISOString() })
-          .eq('id', pageIdRef.current)
+        await dbUpdateBlockPage(pageIdRef.current, blocks)
       } else {
-        const { data } = await supabase
-          .from('block_pages')
-          .insert({ content: blocks })
-          .select('id')
-          .single()
-        if (data?.id) pageIdRef.current = data.id as string
+        const id = await dbCreateBlockPage(blocks)
+        if (id) pageIdRef.current = id
       }
     } finally {
       setSaving(false)
@@ -79,14 +72,9 @@ export default function NotionPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const { data } = await supabase
-          .from('block_pages')
-          .select('id, content')
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
+        const data = await dbLoadLatestBlockPage()
         if (data) {
-          setPageId(data.id as string)
+          setPageId(data.id)
           setInitialBlocks((data.content as Block[]) ?? [])
         }
       } catch {
