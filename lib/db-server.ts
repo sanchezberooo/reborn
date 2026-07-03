@@ -260,6 +260,235 @@ export async function saveJournalEntry(
  * retrieval'da görünmeye devam ederdi (güven ihlali); tersi yalnızca
  * backfill ile kapanan zararsız bir boşluk bırakır.
  */
+// ─── Goals (Faz 2, Görev 2) ──────────────────────────────────────────────────
+// Goals migration 0001'in NATIVE modunda yaşar: her goal bir entities satırı
+// (type='goal', source_table NULL) + goals uzantı satırıdır (1:1, PK=FK, bkz.
+// migrations/0002_goals.sql). Journal'daki köprü senkronunun (syncJournalEntry-
+// Entity) karşılığı YOKTUR — title/description'ın esas kaynağı zaten entities,
+// senkronize edilecek ikinci kaynak yok.
+
+export type GoalStatus = 'active' | 'paused' | 'completed' | 'abandoned'
+export type GoalProgressType = 'binary' | 'percentage' | 'milestone'
+
+/** Alt-hedef kenarının sözleşme etiketi: kaynak=çocuk, hedef=ebeveyn. */
+export const SUB_GOAL_LINK_LABEL = 'sub-goal-of'
+
+export interface Goal {
+  id: string
+  user_id: string
+  title: string
+  description: string | null
+  parent_goal_id: string | null
+  target_date: string | null
+  status: GoalStatus
+  progress_type: GoalProgressType
+  progress_value: number
+  created_at: string
+  updated_at: string
+}
+
+export interface GoalInput {
+  /** Verilirse güncelleme, verilmezse yaratma. */
+  id?: string
+  /** Yaratmada zorunlu; güncellemede verilmezse mevcut korunur. */
+  title?: string
+  description?: string | null
+  parentGoalId?: string | null
+  targetDate?: string | null
+  status?: GoalStatus
+  progressType?: GoalProgressType
+  progressValue?: number
+}
+
+const GOAL_COLUMNS =
+  'id, user_id, parent_goal_id, target_date, status, progress_type, progress_value, created_at, updated_at'
+
+/** goals uzantı satırı + entity metnini tek Goal nesnesinde birleştirir. */
+async function readGoal(goalId: string): Promise<Goal> {
+  const { supabase } = await entityDeps()
+  const [{ data: row, error }, { data: entity, error: entityError }] = await Promise.all([
+    supabase.from('goals').select(GOAL_COLUMNS).eq('id', goalId).single(),
+    supabase.from('entities').select('title, content').eq('id', goalId).single(),
+  ])
+  if (error) throw error
+  if (entityError) throw entityError
+  return {
+    ...(row as Omit<Goal, 'title' | 'description' | 'target_date'>),
+    target_date: (row as { target_date: string | null }).target_date
+      ? String((row as { target_date: string }).target_date).slice(0, 10)
+      : null,
+    title: entity!.title as string,
+    description: (entity!.content as string | null) ?? null,
+  }
+}
+
+/** Ebeveyn zincirini yukarı yürüyerek döngü kontrolü: parent'ın ataları
+ *  arasında goalId varsa bu atama hiyerarşiyi döngüye sokar. */
+async function assertNoGoalCycle(goalId: string, parentId: string): Promise<void> {
+  const { supabase } = await entityDeps()
+  let cursor: string | null = parentId
+  for (let depth = 0; cursor !== null; depth++) {
+    if (cursor === goalId) {
+      throw new Error('saveGoal: döngüsel alt-hedef ilişkisi — hedef kendi alt hedefinin altına taşınamaz.')
+    }
+    if (depth > 100) throw new Error('saveGoal: alt-hedef zinciri beklenmedik derinlikte (>100).')
+    // Açık anotasyon: sorgu sonucu cursor'a geri aktığı için TS çıkarımı
+    // kendine referans verir (TS7022) — sonucu bildirilmiş tiple karşıla.
+    const res: { data: { parent_goal_id: string | null } | null; error: unknown } = await supabase
+      .from('goals')
+      .select('parent_goal_id')
+      .eq('id', cursor)
+      .maybeSingle()
+    if (res.error) throw res.error
+    cursor = res.data?.parent_goal_id ?? null
+  }
+}
+
+/** Alt-hedef kenarını parent durumuna göre senkron tutar: bayat sub-goal-of
+ *  kenarları silinir, geçerli ebeveyne kenar (yoksa) kurulur. */
+async function syncSubGoalLink(goalId: string, parentId: string | null): Promise<void> {
+  const { supabase } = await entityDeps()
+  let stale = supabase
+    .from('links')
+    .delete()
+    .eq('source_entity_id', goalId)
+    .eq('kind', 'user')
+    .eq('label', SUB_GOAL_LINK_LABEL)
+  if (parentId) stale = stale.neq('target_entity_id', parentId)
+  const { error } = await stale
+  if (error) throw error
+
+  if (parentId) {
+    await createLink({
+      sourceEntityId: goalId,
+      targetEntityId: parentId,
+      kind: 'user',
+      label: SUB_GOAL_LINK_LABEL,
+    })
+  } else {
+    invalidateRetrievalCache() // silme dalında createLink'in invalidasyonu yok
+  }
+}
+
+/**
+ * Goal yaratır ya da günceller (input.id). Yaratma: native entity (embedding
+ * dahil) + goals uzantı satırı; uzantı yazımı başarısız olursa entity geri
+ * alınır (yarım goal kalmaz). Güncelleme: verilmeyen alanlar korunur; başlık/
+ * açıklama değişince embedding yeniden hesaplanır. Her iki yolda da alt-hedef
+ * links kenarı parent_goal_id ile senkron tutulur.
+ */
+export async function saveGoal(userId: string, input: GoalInput): Promise<Goal> {
+  const { supabase, embedder } = await entityDeps()
+
+  if (input.parentGoalId) {
+    const { data: parent, error } = await supabase
+      .from('goals')
+      .select('id, user_id')
+      .eq('id', input.parentGoalId)
+      .maybeSingle()
+    if (error) throw error
+    if (!parent || parent.user_id !== userId) {
+      throw new Error('saveGoal: parent_goal_id geçersiz — ebeveyn hedef bulunamadı.')
+    }
+  }
+
+  if (input.id) {
+    // ── Güncelleme ──
+    const { data: existing, error: lookupError } = await supabase
+      .from('goals')
+      .select(GOAL_COLUMNS)
+      .eq('id', input.id)
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (lookupError) throw lookupError
+    if (!existing) throw new Error('saveGoal: hedef bulunamadı.')
+
+    const parentGoalId =
+      input.parentGoalId !== undefined ? input.parentGoalId : (existing.parent_goal_id as string | null)
+    if (parentGoalId) await assertNoGoalCycle(input.id, parentGoalId)
+
+    if (input.title !== undefined || input.description !== undefined) {
+      const { data: entity, error: entityError } = await supabase
+        .from('entities')
+        .select('title, content')
+        .eq('id', input.id)
+        .single()
+      if (entityError) throw entityError
+      const title = input.title !== undefined ? input.title : (entity!.title as string)
+      if (!title.trim()) throw new Error('saveGoal: title boş olamaz.')
+      const content = input.description !== undefined ? input.description : (entity!.content as string | null)
+      const [embedding] = await embedder.embed([content ? `${title}\n\n${content}` : title])
+      const { error: updateError } = await supabase
+        .from('entities')
+        .update({ title, content, embedding, updated_at: new Date().toISOString() })
+        .eq('id', input.id)
+      if (updateError) throw updateError
+      invalidateRetrievalCache()
+    }
+
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (input.parentGoalId !== undefined) patch.parent_goal_id = input.parentGoalId
+    if (input.targetDate !== undefined) patch.target_date = input.targetDate
+    if (input.status !== undefined) patch.status = input.status
+    if (input.progressType !== undefined) patch.progress_type = input.progressType
+    if (input.progressValue !== undefined) patch.progress_value = input.progressValue
+    const { error: goalError } = await supabase.from('goals').update(patch).eq('id', input.id)
+    if (goalError) throw goalError
+
+    await syncSubGoalLink(input.id, parentGoalId)
+    return readGoal(input.id)
+  }
+
+  // ── Yaratma ──
+  if (!input.title?.trim()) throw new Error('saveGoal: yeni hedef için title zorunlu.')
+
+  const entity = await createEntity({
+    userId,
+    type: 'goal',
+    title: input.title,
+    content: input.description ?? undefined,
+  })
+
+  const { error: insertError } = await supabase.from('goals').insert({
+    id: entity.id,
+    user_id: userId,
+    parent_goal_id: input.parentGoalId ?? null,
+    target_date: input.targetDate ?? null,
+    status: input.status ?? 'active',
+    progress_type: input.progressType ?? 'binary',
+    progress_value: input.progressValue ?? 0,
+  })
+  if (insertError) {
+    await deleteEntity(entity.id).catch(() => {}) // rollback; asıl hata aşağıda
+    throw insertError
+  }
+
+  if (input.parentGoalId) await syncSubGoalLink(entity.id, input.parentGoalId)
+  return readGoal(entity.id)
+}
+
+/**
+ * Goal'ü GERÇEKTEN siler — journal'daki gerekçeyle tutarlı: kullanıcı sil
+ * dediğinde sistem unutur. Entity silinir; goals uzantısı ve links kenarları
+ * FK cascade ile düşer, alt hedeflerin parent_goal_id'si SET NULL ile boşalır
+ * (çocuklar kök hedef olur — zincirleme silme sürprizi yok, migration 0002
+ * tasarım notu).
+ */
+export async function deleteGoal(userId: string, id: string): Promise<boolean> {
+  const { supabase } = await entityDeps()
+  const { data: row, error } = await supabase
+    .from('goals')
+    .select('id')
+    .eq('id', id)
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw error
+  if (!row) return false
+
+  await deleteEntity(id)
+  return true
+}
+
 export async function deleteJournalEntry(userId: string, date: string): Promise<boolean> {
   const { supabase } = await entityDeps()
   const { data: row, error: lookupError } = await supabase
