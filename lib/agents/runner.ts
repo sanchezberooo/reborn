@@ -1,15 +1,34 @@
-import type Anthropic from '@anthropic-ai/sdk'
-import { anthropic, CLAUDE_MODEL, TOOLS, WEB_SEARCH_TOOL } from '@/lib/anthropic'
+import { getAIProvider, TOOLS } from '@/lib/ai'
+import type { AIMessage, AIToolResult } from '@/lib/ai'
 import { getAgent } from '@/lib/agents/registry'
 import { serverExecuteTool } from '@/lib/agents/executor'
-
-type MessageParam = Anthropic.Messages.MessageParam
-type ToolUseBlock = Anthropic.Messages.ToolUseBlock
-type ToolResultBlockParam = Anthropic.Messages.ToolResultBlockParam
 
 export type AgentRunResult =
   | { ok: true; output: unknown; runId: string }
   | { ok: false; error: string; notFound?: true }
+
+/**
+ * Ajanların JSON-only çıktı sözleşmesini ayıklar: kod bloklu (```json ... ```)
+ * sarmalamayı kaldırır, ilk `{` ile son `}` arasını alır, parse eder. Bozuk
+ * çıktıda veri kaybetmeden `parseError` fallback'ine düşer.
+ */
+export function parseAgentOutput(finalText: string): unknown {
+  const debracketed = finalText
+    .replace(/^```(?:json)?\s*\n?/, '')
+    .replace(/\n?```\s*$/, '')
+    .trim()
+  const firstBrace = debracketed.indexOf('{')
+  const lastBrace  = debracketed.lastIndexOf('}')
+  const candidate  = firstBrace !== -1 && lastBrace > firstBrace
+    ? debracketed.slice(firstBrace, lastBrace + 1)
+    : debracketed
+
+  try {
+    return JSON.parse(candidate)
+  } catch {
+    return { parseError: true, rawLength: finalText.length, raw: finalText }
+  }
+}
 
 export async function runAgent(
   agentName: string,
@@ -41,87 +60,56 @@ export async function runAgent(
   const runId = runRow.id as string
 
   try {
+    const provider = getAIProvider()
+
     const customTools = agent.toolNames.length > 0
-      ? TOOLS.filter((t) => agent.toolNames.includes(t.name)) as Anthropic.Messages.Tool[]
+      ? TOOLS.filter((t) => agent.toolNames.includes(t.name))
       : []
 
-    const useWebSearch = Boolean(agent.webSearch)
-    const toolsForCall: Anthropic.Messages.Tool[] = useWebSearch
-      ? [...customTools, WEB_SEARCH_TOOL]
-      : customTools
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const apiCreate: (p: Record<string, unknown>) => Promise<any> = useWebSearch
-      ? (p) => (anthropic.beta.messages as unknown as { create: (p: Record<string, unknown>) => Promise<unknown> })
-          .create({ ...p, betas: ['web-search-2025-03-05'] })
-      : (p) => anthropic.messages.create(p as unknown as Anthropic.MessageCreateParamsNonStreaming)
-
-    const messages: MessageParam[] = [
+    const messages: AIMessage[] = [
       { role: 'user', content: JSON.stringify(input) },
     ]
 
     let finalText = ''
 
     while (true) {
-      const response = await apiCreate({
-        model: agent.model ?? CLAUDE_MODEL,
+      const turn = await provider.complete({
+        model: agent.model,
         system: agent.persona,
         messages,
-        ...(toolsForCall.length > 0 ? { tools: toolsForCall } : {}),
-        max_tokens: agent.maxTokens ?? 2048,
+        tools: customTools,
+        maxTokens: agent.maxTokens ?? 2048,
+        webSearch: Boolean(agent.webSearch),
       })
 
-      for (const block of response.content as { type: string; text?: string }[]) {
-        if (block.type === 'text') finalText += block.text ?? ''
-      }
+      finalText += turn.text
 
-      if (response.stop_reason === 'end_turn' || response.stop_reason === 'max_tokens') break
+      if (turn.stopReason !== 'tool_use') break
 
-      if (response.stop_reason === 'tool_use') {
-        const toolUses = (response.content as { type: string }[]).filter(
-          (b): b is ToolUseBlock => b.type === 'tool_use'
-        )
+      messages.push({ role: 'assistant', content: turn.text, raw: turn.raw })
 
-        messages.push({ role: 'assistant', content: response.content as MessageParam['content'] })
-
-        const toolResults: ToolResultBlockParam[] = await Promise.all(
-          toolUses.map(async (tu) => {
-            const result = await serverExecuteTool(tu.name, tu.input as Record<string, unknown>, userId)
-            const resultStr = typeof result === 'string' ? result : JSON.stringify(result)
-            void supabase.from('agent_logs').insert({
-              run_id: runId,
-              agent_name: agentName,
-              action: tu.name,
-              result: resultStr.slice(0, 500),
-            })
-            return { type: 'tool_result' as const, tool_use_id: tu.id, content: resultStr }
+      const toolResults: AIToolResult[] = await Promise.all(
+        turn.toolUses.map(async (tu) => {
+          const result = await serverExecuteTool(tu.name, tu.input, userId)
+          const resultStr = typeof result === 'string' ? result : JSON.stringify(result)
+          void supabase.from('agent_logs').insert({
+            run_id: runId,
+            agent_name: agentName,
+            action: tu.name,
+            result: resultStr.slice(0, 500),
           })
-        )
+          return { toolUseId: tu.id, content: resultStr }
+        })
+      )
 
-        if (toolResults.length > 0) {
-          messages.push({ role: 'user', content: toolResults })
-        } else {
-          break
-        }
+      if (toolResults.length > 0) {
+        messages.push({ role: 'tool_results', results: toolResults })
+      } else {
+        break
       }
     }
 
-    const debracketed = finalText
-      .replace(/^```(?:json)?\s*\n?/, '')
-      .replace(/\n?```\s*$/, '')
-      .trim()
-    const firstBrace = debracketed.indexOf('{')
-    const lastBrace  = debracketed.lastIndexOf('}')
-    const candidate  = firstBrace !== -1 && lastBrace > firstBrace
-      ? debracketed.slice(firstBrace, lastBrace + 1)
-      : debracketed
-
-    let output: unknown
-    try {
-      output = JSON.parse(candidate)
-    } catch {
-      output = { parseError: true, rawLength: finalText.length, raw: finalText }
-    }
+    const output = parseAgentOutput(finalText)
 
     await supabase.from('agent_runs').update({
       status: 'done',

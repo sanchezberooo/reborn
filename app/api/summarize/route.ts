@@ -1,4 +1,4 @@
-import { openai } from '@/lib/openai-client'
+import { getAIProvider } from '@/lib/ai'
 
 export async function POST(req: Request) {
   const { messages } = await req.json() as {
@@ -9,34 +9,24 @@ export async function POST(req: Request) {
     return Response.json({ summary: null })
   }
 
-  // Fallback: if no OpenAI key, use the first user message as the summary
-  if (!process.env.OPENAI_API_KEY) {
-    const firstUser = messages.find((m) => m.role === 'user')
-    return Response.json({ summary: firstUser?.content.slice(0, 200) ?? null })
-  }
-
   const conversation = messages
     .map((m) => `${m.role === 'user' ? 'Bero' : 'Sanchez'}: ${m.content}`)
     .join('\n')
 
   try {
-    const result = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content:
-            'Aşağıdaki sohbeti 1-2 cümleyle Türkçe özetle. Bero ne hakkında konuştu, ne öğrendi veya ne kararlaştırdı? Özet bilgi yoğun ve net olsun.',
-        },
-        { role: 'user', content: conversation },
-      ],
-      max_tokens: 200,
+    const provider = getAIProvider()
+    const turn = await provider.complete({
+      // Özet basit/ucuz bir iş — Sanchez'in ana modeli yerine haiku (bkz. registry deseni)
+      model: 'claude-haiku-4-5',
+      system:
+        'Aşağıdaki sohbeti 1-2 cümleyle Türkçe özetle. Bero ne hakkında konuştu, ne öğrendi veya ne kararlaştırdı? Özet bilgi yoğun ve net olsun.',
+      messages: [{ role: 'user', content: conversation }],
+      maxTokens: 200,
     })
 
-    const summary = result.choices[0]?.message?.content ?? null
-    return Response.json({ summary })
+    return Response.json({ summary: turn.text || null })
   } catch {
-    // OpenAI call failed — fall back to first user message
+    // Provider çağrısı başarısız — ilk kullanıcı mesajına düşen zarif fallback
     const firstUser = messages.find((m) => m.role === 'user')
     return Response.json({ summary: firstUser?.content.slice(0, 200) ?? null })
   }

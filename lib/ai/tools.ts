@@ -1,29 +1,20 @@
-import Anthropic from '@anthropic-ai/sdk'
+import type { AIToolDef } from './provider'
 
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+// Sanchez ve ajanların custom tool tanımları — provider-bağımsız şema
+// (lib/anthropic.ts'ten taşındı). Davranışları lib/agents/executor.ts
+// serverExecuteTool() switch'inde; yeni tool eklerken İKİSİNİ birlikte güncelle.
+// Anthropic'e çeviri AnthropicProvider içinde yapılır (inputSchema → input_schema).
 
-// Sanchez'in ana modeli. Sonnet sınıfı: ~$3/M girdi + ~$15/M çıktı token.
-// Tipik bir Sanchez mesajı (sistem promptu ~3-4K + geçmiş + araç tanımları
-// ~2K girdi, ~300-800 çıktı token) yaklaşık $0.02-0.05/mesaj eder; araç
-// zincirleri (web search, run_agent) her turda girdiyi tekrar gönderdiği
-// için bunu 2-4 katına çıkarabilir. Ucuz/basit ajan işleri için registry'de
-// model: 'claude-haiku-4-5' override'ı kullan (~12 kat daha ucuz).
-export const CLAUDE_MODEL = 'claude-sonnet-4-6'
-
-// ─── Custom tool definitions ───────────────────────────────────────────────────
-
-export const TOOLS: Anthropic.Tool[] = [
+export const TOOLS: AIToolDef[] = [
   {
     name: 'read_habits',
     description: 'Bu haftanın alışkanlık loglarını ve habits tablosundaki habit listesini okur.',
-    input_schema: { type: 'object', properties: {}, required: [] },
+    inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'read_memories',
     description: 'memories tablosundan Bero hakkındaki hafızaları okur. type veya tags ile filtrelenebilir.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         type:  { type: 'string', description: 'Filtre: general, goal, user_fact, project vb.' },
@@ -36,12 +27,12 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'read_profile',
     description: "Bero'nun profilini profiles ve user_profile tablolarından okur.",
-    input_schema: { type: 'object', properties: {}, required: [] },
+    inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'read_modules',
     description: "modules tablosundan Bero'nun modüllerini okur.",
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         module_id: { type: 'string', description: 'Belirli bir modül ID (opsiyonel)' },
@@ -52,7 +43,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'read_library',
     description: 'library tablosundan kayıtlı içerikleri okur.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         category: { type: 'string', description: 'Kategori: scholarship, resource, book, note vb.' },
@@ -64,12 +55,12 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'read_conversations',
     description: 'Son 10 sohbetin başlıklarını conversations tablosundan okur.',
-    input_schema: { type: 'object', properties: {}, required: [] },
+    inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
     name: 'toggle_habit',
     description: 'Bir alışkanlığı belirli bir tarih için tamamlandı / tamamlanmadı olarak işaretler.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         habit_id:  { type: 'string',  description: 'Habit ID: sleep, eat, study, exercise vb.' },
@@ -82,7 +73,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'save_memory',
     description: "Bero hakkında önemli bir bilgiyi memories tablosuna kaydeder.",
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         content:    { type: 'string', description: 'Kaydedilecek bilgi' },
@@ -96,7 +87,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'update_profile',
     description: "Bero'nun profilindeki bir değeri user_profile tablosunda günceller.",
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         key:   { type: 'string', description: 'Profil anahtarı: ielts_target, location, goal vb.' },
@@ -108,7 +99,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'save_to_library',
     description: 'Bir içeriği, kaynağı veya notu library tablosuna kaydeder.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         title:    { type: 'string', description: 'Başlık' },
@@ -122,7 +113,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'log_agent_action',
     description: 'Yapılan bir agent eylemini agent_logs tablosuna kaydeder.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         agent_name: { type: 'string', description: 'Agent adı: sanchez, kesif vb.' },
@@ -135,7 +126,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'update_module',
     description: "Bir modülün data alanını günceller (patch olarak uygulanır).",
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         module_id: { type: 'string', description: 'Modül ID: english, roadmap, finance, body vb.' },
@@ -147,7 +138,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'add_roadmap_item',
     description: 'Yol haritasına yeni bir milestone veya hedef ekler.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         title:    { type: 'string', description: 'Milestone başlığı' },
@@ -161,7 +152,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'read_essays',
     description: "Kullanıcının essay'lerini ve her birinin SON versiyon metnini okur. essay-critic'i çalıştırmadan önce taslağı almak için kullan.",
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         essay_id: { type: 'string', description: 'Belirli bir essay ID (opsiyonel — verilmezse hepsi listelenir)' },
@@ -172,7 +163,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'run_agent',
     description: 'Uzman bir ajanı çalıştırır ve sonucunu döndürür. Araştırma, plan üretimi veya derin analiz gerektiren işler için kullan.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         agentName: {
@@ -190,7 +181,7 @@ export const TOOLS: Anthropic.Tool[] = [
   {
     name: 'add_scholarship',
     description: "Burs başvurusu için bir üniversiteyi library ve scholarship modülüne ekler.",
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         university: { type: 'string', description: 'Üniversite adı' },
@@ -202,10 +193,3 @@ export const TOOLS: Anthropic.Tool[] = [
     },
   },
 ]
-
-// Built-in web search — Anthropic sunucuları tarafından işlenir
-export const WEB_SEARCH_TOOL = {
-  type: 'web_search_20250305' as const,
-  name: 'web_search',
-} as unknown as Anthropic.Tool
-
