@@ -72,6 +72,15 @@ function getExtractor() {
 
 const embeddingCache = new LruCache<number[]>(512)
 
+// Süreç başına tek provider — model yüklemesi zaten modül seviyesinde tekil
+// (extractorPromise); bu erişimci de çağıranların (lib/db.ts createEntity,
+// lib/ai/retrieval.ts) her seferinde new'lemesini önler.
+let providerSingleton: LocalEmbeddingProvider | null = null
+export function getLocalEmbeddingProvider(): LocalEmbeddingProvider {
+  providerSingleton ??= new LocalEmbeddingProvider()
+  return providerSingleton
+}
+
 export class LocalEmbeddingProvider implements AIProvider {
   readonly name = 'local-embedding'
   readonly capabilities: AIProviderCapabilities = { webSearch: false, embeddings: true }
