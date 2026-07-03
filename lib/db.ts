@@ -514,12 +514,17 @@ export async function dbLoadJournalEntry(date: string): Promise<JournalEntry | n
 }
 
 export async function dbSaveJournalEntry(entry: Omit<JournalEntry, 'id'>): Promise<void> {
-  const userId = await uid()
-  const { error } = await db().from('journal_entries').upsert(
-    { ...entry, user_id: userId, updated_at: new Date().toISOString() },
-    { onConflict: 'user_id,date' },
-  )
-  if (error) throw error
+  // Yazma sunucuya taşındı (Faz 2, Görev 1): silo upsert + entities köprü
+  // senkronu (embedding sunucu-only) tek kapıda, lib/db-server.ts'te yaşar.
+  const res = await fetch('/api/journal', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(entry),
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => null) as { error?: string } | null
+    throw new Error(body?.error ?? `Günlük kaydedilemedi (HTTP ${res.status}).`)
+  }
 }
 
 export async function dbLoadJournalDates(): Promise<string[]> {
