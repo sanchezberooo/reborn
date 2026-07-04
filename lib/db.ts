@@ -2,6 +2,8 @@ import { getSupabaseBrowser } from './supabase'
 import type { BeroProfile } from './memory'
 import type { ModuleItem, ActionType } from './modules'
 import { DEFAULT_MODULES, migrateModule } from './modules'
+import type { ModuleSettings } from './module-registry'
+import { applyModuleToggle } from './module-registry'
 
 function db() {
   return getSupabaseBrowser()
@@ -736,6 +738,78 @@ export async function dbLoadRecentJournalEntries(limit = 5): Promise<JournalEntr
     const d = r as Record<string, unknown>
     return { ...d, date: String(d.date).slice(0, 10) }
   }) as unknown as JournalEntry[]
+}
+
+// ─── Goals (Faz 2, Görev 2) — salt-okunur özet ───────────────────────────────
+// Yazma yolu lib/db-server.ts'te yaşar (native entity + embedding, sunucu-only).
+// Burada yalnız Dashboard kartı gibi hafif okumalar için: goals uzantı satırı +
+// entities.title iki ayrı sorguyla çekilip id üzerinden birleştirilir — aynı
+// desen lib/db-server.ts readGoal()'da, embedding'siz haliyle.
+
+export type GoalStatus = 'active' | 'paused' | 'completed' | 'abandoned'
+
+export interface GoalSummary {
+  id: string
+  title: string
+  status: GoalStatus
+  target_date: string | null
+  progress_value: number
+}
+
+export async function dbLoadGoals(): Promise<GoalSummary[]> {
+  const userId = await uid()
+  const { data: goals, error } = await db()
+    .from('goals')
+    .select('id, status, target_date, progress_value')
+    .eq('user_id', userId)
+  if (error) throw error
+  const rows = (goals ?? []) as Array<{
+    id: string; status: GoalStatus; target_date: string | null; progress_value: number
+  }>
+  if (rows.length === 0) return []
+
+  const { data: entities, error: entError } = await db()
+    .from('entities')
+    .select('id, title')
+    .in('id', rows.map((r) => r.id))
+  if (entError) throw entError
+  const titleById = new Map(
+    (entities ?? []).map((e) => [(e as Record<string, unknown>).id as string, (e as Record<string, unknown>).title as string]),
+  )
+
+  return rows.map((r) => ({ ...r, title: titleById.get(r.id) ?? '(başlıksız hedef)' }))
+}
+
+// ─── Modül çerçevesi v1 (Faz 2, Görev 4) ─────────────────────────────────────
+// Görünürlük tercihi profiles.module_settings'te yaşar (migration 0003).
+// Bu fonksiyonlar VERİYE dokunmaz: modül kapatmak yalnız tercih yazar,
+// entities/goals/journal_* satırları korunur (bkz. lib/module-registry.ts).
+
+export async function dbLoadModuleSettings(): Promise<ModuleSettings> {
+  const userId = await uid()
+  const { data, error } = await db()
+    .from('profiles')
+    .select('module_settings')
+    .eq('id', userId)
+    .single()
+  // Kolon henüz yoksa (migration 0003 uygulanmadan) hata döner —
+  // güvenli varsayılan: '{}' = tüm modüller açık.
+  if (error) return {}
+  return (data?.module_settings as ModuleSettings) ?? {}
+}
+
+export async function dbSetModuleEnabled(
+  moduleId: string,
+  enabled: boolean,
+): Promise<ModuleSettings> {
+  const userId = await uid()
+  const next = applyModuleToggle(await dbLoadModuleSettings(), moduleId, enabled)
+  const { error } = await db()
+    .from('profiles')
+    .update({ module_settings: next, updated_at: new Date().toISOString() })
+    .eq('id', userId)
+  if (error) throw error
+  return next
 }
 
 // Entities & Links (Faz 1 — Unified Entity Core) yazma yolu artık lib/db-server.ts'te
