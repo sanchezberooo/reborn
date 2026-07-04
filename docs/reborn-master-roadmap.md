@@ -222,3 +222,57 @@ Modül genişlemesi (Fitness, Finance, Learning, Career…), MCP client entegras
 5. Yüzey sade, güç arka planda mı?
 
 Bir özellik bu filtrelerden geçemiyorsa Reborn'da yeri yoktur.
+---
+
+## 5. Uzun Vadeli Mimari Hedefler (Kılavuz İlkeler)
+
+> Bu bölüm bir faz veya görev listesi DEĞİLDİR. Bugünün geliştirme sırasını değiştirmez. Amacı: gelecekteki mimari kararlar alınırken bu hedeflerle çelişilmemesini garanti etmek — bir karar bu ilkelerden birini kalıcı olarak imkansız kılıyorsa, o karar yeniden değerlendirilmeli.
+
+1. **Model bağımsızlığı.** Sanchez hiçbir zaman tek bir LLM sağlayıcısına kilitlenmeyecek — Claude, OpenAI, Gemini, Qwen, Llama, DeepSeek veya gelecekte çıkacak herhangi bir model kullanılabilmeli. *(Zaten `AIProvider` soyutlamasıyla temeli atıldı — yeni sağlayıcı eklemek `lib/ai/` altına bir implementasyon eklemek kadar basit olmalı, kalıcı bir mimari hedeftir.)*
+
+2. **Kendi MCP ekosistemi.** Başlangıçta dış MCP sunucuları (Obsidian, Supabase, GitHub, Filesystem, Playwright vb.) kullanılacak; uzun vadede Reborn'un kendi MCP sunucuları ve araçları olacak.
+
+3. **Sanchez'in bilgisayar erişimi.** Dosya sistemi, terminal, tarayıcı, VS Code gibi araçları kullanıcı adına güvenli şekilde kullanabilmeli. **Tasarım notu:** bu yetki "kontrol her zaman kullanıcıda" ve "güven" ilkeleriyle kesişir — tek seferde açık bir kapı olmamalı; hangi eylemin otomatik, hangisinin onay gerektirdiğini tanımlayan izin katmanları ayrıca tasarlanmalı (Faz 4/5 civarı, ayrı bir görev olarak).
+
+4. **Sesli etkileşim.** Sanchez sesle yönetilebilmeli ve gerektiğinde sesli rapor sunabilmeli — gelecekte eklenecek bir girdi/çıktı katmanı.
+
+5. **Tek muhatap Sanchez.** Kullanıcı hiçbir zaman diğer ajanlarla doğrudan iletişim kurmaz — bu zaten çekirdek ilke (bkz. §1 Kalıcı Teknik Kararlar), burada yeniden vurgulanıyor.
+
+6. **Agent Office ekip yapısı.** Ajanlar tek tek değil, uzmanlık ekipleri halinde organize olacak (ör. Araştırma, Yazılım, İçerik, Pazarlama). Sanchez görevi ilgili ekibe dağıtır, süreci yönetir, kullanıcıya yalnızca nihai sonucu sunar. *(Faz 4'ün orkestrasyon çekirdeğini bu yapıyı destekleyecek şekilde genişletir.)*
+
+7. **Dashboard = kapsamlı kontrol paneli.** Kullanıcı verileri, ajan durumu, hedefler, hafıza ve sistem sağlığı tek merkezden izlenebilmeli. *(Faz 3'ün modül kartı temelinin üzerine, ajan/sistem durumu panelleri eklenerek büyür.)*
+## 6. Bilgi Mimarisi ve Navigasyon (Kalıcı Kararlar)
+
+> Bu bölüm, 4 Temmuz 2026'da netleşen ve uzun vadede değişmemesi hedeflenen yapısal kararları belgeler. Değiştirilecekse önce burada tartışılıp güncellenmeli — sessizce sapılmamalı.
+
+### 6.1 Dört Ana Bölüm (Navigasyon)
+
+Reborn'un üst seviyesi dört kalıcı bölümden oluşur; bunlar sayfa değil, kendi içinde büyüyen sistemlerdir. Mümkün olduğunca yeni üst seviye sekme eklenmez — büyüme bu dördünün içinde olur.
+
+1. **Sanchez** — kullanıcının tek muhatabı olan AI, sistemin giriş noktası.
+2. **Dashboard** — kullanıcının kişisel hayatını yönettiği merkez (Goals, Journal, English, Finance, Body, Projects gibi kişisel modüller). Office ile görev/ajan detayı **paylaşmaz** — en fazla Office'in küçük bir özet widget'ını gösterir, detay için her zaman Office'e gidilir.
+3. **Office** — Sanchez'in yönettiği AI şirketi: departmanlar, ajanlar, workflow'lar, War Room, üretimler, raporlar, loglar, çıktılar. Ajan/görev yönetiminin **tek** yaşadığı yer.
+4. **Brain** — Reborn'un ikinci beyni. Obsidian yalnızca Brain'e veri sağlayan kaynaklardan biridir (ileride GitHub, Google Drive, Dropbox, Apple Notes gibi başka kaynaklar da eklenebilir). Kullanıcı "Obsidian kullanıyorum" değil, "Brain'i kullanıyorum" hissetmeli.
+
+**Ayarlar** için beşinci sekme açılmaz — sol alt köşedeki profil/avatar üzerinden açılan bir panelde yaşar.
+
+### 6.2 Brain Mimarisi — Tek Graf, Scope ile Filtreleme
+
+Brain **fiziksel olarak tek bir sistemdir**: tek `entities` tablosu, tek `links` tablosu, tek `memories` sistemi (Faz 1'de kurulan çekirdeğin ta kendisi). Departmanlara (Engineering, Marketing, Video, Creative, Business...) özel ayrı veritabanları veya vector store'lar AÇILMAZ — bu, migration 0001'in reddettiği "kalıcı çift-kaynak" hatasını departman ölçeğinde tekrar eder.
+
+Bunun yerine departman ayrımı bir **scope/team etiketi** ile yapılır (ör. `entities.team` alanı). Sanchez bir sorguda dilerse yalnızca tek bir departmanın scope'una bakar, dilerse tüm Brain'i tarar — filtre, ayrı sistem değil.
+
+Her departmanın "kendi Brain'i" olduğu hissi bu filtrelemeyle yaratılır: knowledge base, workflow, SOP, skill set, prompt library, documentation, research, playbook — hepsi aynı tablolarda, `team` ve `type` etiketleriyle ayrışır.
+
+### 6.3 Retrieval vs Pinned Reference — İki Farklı Erişim Modu
+
+Brain içindeki bilgi iki karakterde olabilir ve erişim şekli buna göre değişir:
+
+- **Retrieval (keşif odaklı, olasılıksal):** Journal, Memory, Notes, Research gibi deneyimsel/keşifsel içerik. Semantik arama ile "en alakalı" sonuçlar getirilir; hangi kaydın döneceği bağlama göre değişebilir — bu istenen davranıştır.
+- **Pinned Reference (deterministik, sabit):** SOP, Workflow, Prompt, Skill gibi operasyonel/yapılandırma niteliğindeki içerik. Bir ajan çalışırken bunlara semantik arama ile "tahmin ederek" erişmez — açık bir referansla (pinned entity ID) sabit şekilde okur, tıpkı bir sistemin her oturumda aynı yapılandırma dosyasını okuması gibi. Versiyon karışıklığı veya yanlış SOP seçimi riskini ortadan kaldırır; ajan davranışı öngörülebilir kalır (güven ilkesi).
+
+İki tür de aynı Brain'de (aynı tablolarda) yaşar — ayrım saklama yerinde değil, **erişim yolundadır**.
+
+### 6.4 İnşa Sırası
+
+Departman/Brain mimarisi netleşmiş olsa da, uygulama sırası tektir: önce tek bir departman (örn. Marketing) uçtan uca çalışır hale getirilir, desen doğrulanır, sonra diğer departmanlar aynı mimariyle çoğaltılır. Beş departmanı aynı anda inşa etmeye çalışmak roadmap'in "küçük ve bitmiş > büyük ve yarım" ilkesine aykırıdır.
