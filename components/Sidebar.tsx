@@ -1,6 +1,11 @@
 'use client'
 
+// Sohbet listesi (Sanchez sekmesinin sol sütunu) — UI v1 nötr dil.
+// Veri mantığı değişmedi: dbLoadConversations/dbDeleteConversation +
+// reborn:* olay otobüsü. Yalnız görsel katman v0 diline taşındı.
+
 import { useState, useEffect, useCallback } from 'react'
+import { Plus, Search, X } from 'lucide-react'
 import { dbLoadConversations, dbDeleteConversation } from '@/lib/db'
 import type { ConversationMeta } from '@/lib/db'
 
@@ -30,23 +35,23 @@ function ConvItem({
   onDelete: (e: React.MouseEvent, id: string) => void
 }) {
   return (
-    <div className="group flex items-center gap-0.5 rounded-xl hover:bg-white/[0.04] transition-colors">
-      <button onClick={() => onLoad(conv.id)} className="flex-1 min-w-0 text-left px-2 py-1.5">
-        <p className="text-[12px] text-muted group-hover:text-foreground/70 line-clamp-1 leading-snug transition-colors">
-          {conv.title}
-        </p>
-        <p className="text-[10px] text-muted/60 mt-0.5">
-          {new Date(conv.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
-        </p>
+    <div className="group flex items-center gap-0.5 rounded-lg transition-colors hover:bg-sidebar-accent/60">
+      <button onClick={() => onLoad(conv.id)} className="min-w-0 flex-1 px-2.5 py-2 text-left">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-sm text-foreground/90 transition-colors group-hover:text-foreground">
+            {conv.title}
+          </span>
+          <span className="shrink-0 text-2xs text-muted-foreground">
+            {new Date(conv.created_at).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
+          </span>
+        </div>
       </button>
       <button
         onClick={(e) => onDelete(e, conv.id)}
         title="Sil"
-        className="opacity-0 group-hover:opacity-100 p-1 mr-1.5 rounded-md text-muted/40 hover:text-red-400 transition-all shrink-0"
+        className="mr-1.5 shrink-0 rounded-md p-1 text-muted-foreground/50 opacity-0 transition-all hover:text-destructive group-hover:opacity-100"
       >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M18 6L6 18M6 6l12 12" />
-        </svg>
+        <X className="size-3" strokeWidth={2.5} />
       </button>
     </div>
   )
@@ -66,10 +71,12 @@ function DateGroup({
   if (items.length === 0) return null
   return (
     <div className="mb-3">
-      <p className="text-[10px] text-muted/60 uppercase tracking-wider px-2 mb-1.5">{label}</p>
-      {items.map((conv) => (
-        <ConvItem key={conv.id} conv={conv} onLoad={onLoad} onDelete={onDelete} />
-      ))}
+      <p className="px-2 py-2 text-2xs font-medium uppercase tracking-wider text-muted-foreground">{label}</p>
+      <div className="flex flex-col gap-0.5">
+        {items.map((conv) => (
+          <ConvItem key={conv.id} conv={conv} onLoad={onLoad} onDelete={onDelete} />
+        ))}
+      </div>
     </div>
   )
 }
@@ -110,58 +117,50 @@ export default function Sidebar() {
     : null
 
   return (
-    <aside className="w-[260px] h-full flex flex-col shrink-0 bg-surface-sidebar border-r border-border">
-      {/* New Chat */}
-      <div className="px-3 pt-3 pb-2 shrink-0">
+    <aside className="hidden w-[264px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
+      <div className="p-3">
         <button
           onClick={triggerNewChat}
-          className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm text-gold hover:bg-gold/10 transition-colors font-medium"
+          className="flex w-full items-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
         >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Yeni Sohbet
+          <Plus className="size-4" strokeWidth={2} />
+          Yeni sohbet
         </button>
       </div>
 
-      {/* Search */}
-      <div className="px-3 pb-3 shrink-0">
-        <div className="flex items-center gap-2 bg-surface rounded-xl px-3 py-2 border border-border">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted shrink-0">
-            <circle cx="11" cy="11" r="8" />
-            <path d="M21 21l-4.35-4.35" />
-          </svg>
+      <div className="px-3 pb-3">
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-background/40 px-2.5 py-2">
+          <Search className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Sohbetlerde ara"
-            className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted/60 outline-none"
+            className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
           {search && (
-            <button onClick={() => setSearch('')} className="text-muted/40 hover:text-muted transition-colors">
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
+            <button onClick={() => setSearch('')} className="text-muted-foreground/60 transition-colors hover:text-foreground">
+              <X className="size-3.5" strokeWidth={2.5} />
             </button>
           )}
         </div>
       </div>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto px-3 pb-3">
+      <div className="no-scrollbar flex-1 overflow-y-auto px-2 pb-4">
         {filtered ? (
           filtered.length === 0 ? (
-            <p className="px-2 py-1.5 text-[11px] text-muted/60">Sonuç bulunamadı</p>
+            <p className="px-2.5 py-1.5 text-2xs text-muted-foreground">Sonuç bulunamadı</p>
           ) : (
             <>
-              <p className="text-[10px] text-muted/60 uppercase tracking-wider px-2 mb-2">Sonuçlar</p>
-              {filtered.map((conv) => (
-                <ConvItem key={conv.id} conv={conv} onLoad={onLoad} onDelete={onDelete} />
-              ))}
+              <p className="px-2 py-2 text-2xs font-medium uppercase tracking-wider text-muted-foreground">Sonuçlar</p>
+              <div className="flex flex-col gap-0.5">
+                {filtered.map((conv) => (
+                  <ConvItem key={conv.id} conv={conv} onLoad={onLoad} onDelete={onDelete} />
+                ))}
+              </div>
             </>
           )
         ) : conversations.length === 0 ? (
-          <p className="px-2 py-1.5 text-[11px] text-muted/60">Henüz sohbet yok</p>
+          <p className="px-2.5 py-1.5 text-2xs text-muted-foreground">Henüz sohbet yok</p>
         ) : (
           <>
             <DateGroup label="Bugün" items={today} onLoad={onLoad} onDelete={onDelete} />
@@ -169,16 +168,6 @@ export default function Sidebar() {
             <DateGroup label="Daha Önce" items={earlier} onLoad={onLoad} onDelete={onDelete} />
           </>
         )}
-      </div>
-
-      {/* User */}
-      <div className="shrink-0 px-3 py-3 border-t border-border">
-        <div className="flex items-center gap-2.5 px-2 py-2 rounded-xl hover:bg-white/[0.04] transition-colors cursor-pointer">
-          <div className="w-7 h-7 rounded-full bg-gold/15 border border-gold/25 flex items-center justify-center shrink-0">
-            <span className="text-gold text-xs font-bold">B</span>
-          </div>
-          <span className="text-sm text-foreground font-medium">Bero</span>
-        </div>
       </div>
     </aside>
   )

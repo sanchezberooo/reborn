@@ -1,6 +1,11 @@
 'use client'
 
+// Sanchez sohbet yüzeyi — UI v1 nötr dil. Görsel katman v0'dan uyarlandı;
+// veri/durum mantığı (useSanchezChat, /api/onboarding, streaming protokolü)
+// DEĞİŞMEDİ.
+
 import { useRef, useEffect, useState } from 'react'
+import { Sparkles, ArrowUp } from 'lucide-react'
 import { useSanchezChat } from './useSanchezChat'
 import MessageBubble from './Message'
 
@@ -65,7 +70,7 @@ export default function ChatInterface() {
           {[0, 1, 2].map((i) => (
             <span
               key={i}
-              className="w-1.5 h-1.5 rounded-full bg-gold/50 animate-bounce"
+              className="size-1.5 animate-bounce rounded-full bg-muted-foreground"
               style={{ animationDelay: `${i * 120}ms` }}
             />
           ))}
@@ -75,31 +80,51 @@ export default function ChatInterface() {
   }
 
   return (
-    <div className="flex flex-col h-full bg-background">
+    <div className="flex h-full min-w-0 flex-1 flex-col bg-background">
+      {/* Header */}
+      <header className="flex items-center justify-between border-b border-border px-6 py-3.5">
+        <div className="flex items-center gap-3">
+          <div className="relative flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-primary/90 to-primary/40">
+            <Sparkles className="size-4 text-primary-foreground" strokeWidth={2} />
+            <span className="absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-background bg-success" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-semibold text-foreground">Sanchez</h1>
+              <span className="rounded-full bg-secondary px-2 py-0.5 text-3xs font-medium text-muted-foreground">
+                Tek muhatabın
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">Seni tanıyor, hafızası bağlantılı</p>
+          </div>
+        </div>
+        <div className="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
+          <span className="size-1.5 rounded-full bg-success" />
+          Burada
+        </div>
+      </header>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="no-scrollbar flex-1 overflow-y-auto">
         {isEmpty ? (
-          <div className="flex flex-col items-center justify-center h-full gap-6 px-6">
-            <div className="flex flex-col items-center gap-3">
-              <div className="text-center">
-                <p className="font-display text-foreground text-2xl font-semibold leading-snug">
-                  {onboarding ? 'Hoş geldin. Ben Sanchez.' : 'Seni görmek güzel, Bero.'}
-                </p>
-                <p className="text-muted text-sm mt-2">
-                  {onboarding
-                    ? 'Kurulum ekranı yok — tanışarak başlıyoruz.'
-                    : 'Ne konuşmak istiyorsun?'}
-                </p>
-              </div>
+          <div className="flex h-full flex-col items-center justify-center gap-6 px-6">
+            <div className="text-center">
+              <p className="text-2xl font-semibold leading-snug text-foreground">
+                {onboarding ? 'Hoş geldin. Ben Sanchez.' : 'Seni görmek güzel, Bero.'}
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {onboarding
+                  ? 'Kurulum ekranı yok — tanışarak başlıyoruz.'
+                  : 'Ne konuşmak istiyorsun?'}
+              </p>
             </div>
 
-            <div className="flex flex-col gap-2 w-full max-w-lg">
+            <div className="flex w-full max-w-lg flex-col gap-2">
               {(onboarding ? ONBOARDING_SUGGESTIONS : SUGGESTIONS).map((s) => (
                 <button
                   key={s}
                   onClick={() => pickSuggestion(s)}
-                  className="text-left text-sm text-muted bg-surface border border-border rounded-xl px-4 py-3 hover:border-gold/40 hover:text-foreground transition-all duration-150"
+                  className="rounded-xl border border-border bg-card px-4 py-3 text-left text-sm text-muted-foreground transition-colors hover:border-ring/40 hover:text-foreground"
                 >
                   {s}
                 </button>
@@ -107,7 +132,7 @@ export default function ChatInterface() {
             </div>
           </div>
         ) : (
-          <div className="max-w-3xl mx-auto w-full px-5 pt-8 pb-2">
+          <div className="mx-auto w-full max-w-3xl px-6 pb-2 pt-8">
             {messages.map((msg, i) => (
               <MessageBubble
                 key={msg.id}
@@ -121,40 +146,31 @@ export default function ChatInterface() {
         )}
       </div>
 
-      {/* Input area */}
-      <div className="shrink-0 px-4 pb-5 pt-3">
-        <div className="max-w-3xl mx-auto w-full">
-          <div className="flex items-end gap-3 bg-surface-2 border border-border rounded-2xl px-4 py-3 focus-within:border-gold/40 transition-colors duration-150 shadow-xl shadow-black/30">
+      {/* Composer */}
+      <div className="border-t border-border px-6 pb-5 pt-4">
+        <div className="mx-auto w-full max-w-3xl">
+          <div className="flex items-end gap-2 rounded-2xl border border-border bg-card p-2 pl-4 transition-colors focus-within:border-ring/40">
             <textarea
               ref={textareaRef}
               value={input}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
-              placeholder="Sanchez'e yaz..."
+              placeholder="Sanchez'e yaz…"
               rows={1}
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted/60 resize-none outline-none leading-relaxed py-0.5"
+              className="max-h-40 flex-1 resize-none bg-transparent py-2 text-sm leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
               style={{ maxHeight: '200px' }}
             />
             <button
               onClick={send}
               disabled={!input.trim() || loading}
-              className="shrink-0 w-8 h-8 rounded-xl bg-gold flex items-center justify-center transition-all duration-150 disabled:opacity-25 hover:opacity-75 active:scale-95"
+              className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+              aria-label="Gönder"
             >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                className="text-background -rotate-90"
-              >
-                <path d="M12 19V5M5 12l7-7 7 7" />
-              </svg>
+              <ArrowUp className="size-5" strokeWidth={2} />
             </button>
           </div>
 
-          <p className="text-center text-[10px] text-muted/40 mt-2">
+          <p className="mt-2 text-center text-3xs text-muted-foreground/60">
             Enter — gönder · Shift+Enter — yeni satır
           </p>
         </div>
