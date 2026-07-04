@@ -1,55 +1,94 @@
 @import 'tailwindcss';
 
+/* ────────────────────────────────────────────────────────────────────────────
+   REBORN tasarım sistemi v1 — nötr dil (siyah/gri/beyaz).
+   Kalıcı karar (UI v1): altın/amber vurgusu YOK; vurgu rengi nötr beyazdır,
+   renk yalnız semantik durumlar için kullanılır (success/destructive/warning).
+   Legacy alias'lar (--gold, --surface-*, --text-muted) eski ekranlar yeni
+   dile taşınana kadar nötr değerlere maplenir — yeni kodda kullanma;
+   yeni kodda shadcn adları (background/card/secondary/muted-foreground) esas.
+   ──────────────────────────────────────────────────────────────────────── */
+
 :root {
+  color-scheme: dark;
+
   --background: #0a0a0a;
-  --foreground: #ffffff;
-  --gold: #c8a96e;
-  --gold-dim: #a8894e;
-  --surface: #111111;
-  --surface-sidebar: #111111;
-  --surface-2: #111111;
-  --surface-3: #1a1a1a;
-  --border: #222222;
-  --success: #22c55e;
+  --foreground: #f5f5f5;
+  --card: #141414;
+  --card-foreground: #f5f5f5;
+  --popover: #161616;
+  --popover-foreground: #f5f5f5;
+  --primary: #f5f5f5;
+  --primary-foreground: #0a0a0a;
+  --secondary: #1d1d1d;
+  --secondary-foreground: #ededed;
+  --muted-foreground: #a3a3a3;
+  --accent: #232323;
+  --accent-foreground: #f5f5f5;
+  --success: #4ade80;
   --warning: #f59e0b;
-  --text-muted: #a0a0a0;
-  --text-tertiary: #666666;
-  --sidebar: #0f0f0f;
-  --sidebar-foreground: #ffffff;
-  --sidebar-border: #1e1e1e;
-  --sidebar-accent: #1a1a1a;
+  --destructive: #ef4444;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #d4d4d4;
+
+  --sidebar: #0d0d0d;
+  --sidebar-foreground: #f5f5f5;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-accent: #1c1c1c;
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-primary: #c8a96e;
+  --sidebar-primary: #f5f5f5;
   --sidebar-primary-foreground: #0a0a0a;
-  --sidebar-ring: #c8a96e;
+  --sidebar-ring: #d4d4d4;
+
+  /* Legacy alias'lar — nötr karşılıklar (yeni kodda kullanma) */
+  --gold: #e5e5e5;
+  --gold-dim: #b0b0b0;
+  --surface: #141414;
+  --surface-sidebar: #0d0d0d;
+  --surface-2: #171717;
+  --surface-3: #1f1f1f;
+  --text-muted: #a3a3a3;
+  --text-tertiary: #6b6b6b;
+
+  /* Legacy modül vurgu paleti — yeni dilde kullanılmıyor; eski ekranlar
+     taşınana kadar nötr gri tonlarına indirgendi. */
+  --accent-clay: #8a8a8a;
+  --accent-rose: #9a9a9a;
+  --accent-emerald: #a8a8a8;
+  --accent-violet: #909090;
+  --accent-sky: #b0b0b0;
+  --accent-sage: #9c9c9c;
+  --accent-crimson: #868686;
+  --accent-plum: #7e7e7e;
+  --accent-slate: #6e6e6e;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-gold: var(--gold);
-  --color-gold-dim: var(--gold-dim);
-  --color-surface: var(--surface);
-  --color-surface-sidebar: var(--surface-sidebar);
-  --color-surface-2: var(--surface-2);
-  --color-surface-3: var(--surface-3);
-  --color-border: var(--border);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  /* Dikkat: bu projede `muted` LEGACY olarak metin rengidir (text-muted),
+     shadcn'deki gibi zemin rengi değil. Yeni kodda text-muted-foreground kullan. */
   --color-muted: var(--text-muted);
-  --color-muted-foreground: var(--text-muted);
-  --color-card: var(--surface);
-  --color-card-foreground: var(--foreground);
-  --color-popover: var(--surface-2);
-  --color-popover-foreground: var(--foreground);
-  --color-primary: var(--gold);
-  --color-primary-foreground: #1a1209;
-  --color-secondary: var(--surface-2);
-  --color-secondary-foreground: var(--foreground);
-  --color-accent: var(--surface-2);
-  --color-accent-foreground: var(--foreground);
-  --color-destructive: #ef4444;
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-destructive: var(--destructive);
   --color-destructive-foreground: #ffffff;
-  --color-ring: var(--gold);
-  --color-input: var(--border);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-border: var(--sidebar-border);
@@ -58,8 +97,26 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-ring: var(--sidebar-ring);
-  --font-display: var(--font-playfair);
-  --font-sans: var(--font-inter);
+
+  /* Legacy alias'lar */
+  --color-gold: var(--gold);
+  --color-gold-dim: var(--gold-dim);
+  --color-surface: var(--surface);
+  --color-surface-sidebar: var(--surface-sidebar);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  /* font-display legacy sınıfı — nötr dilde ayrı display fontu yok */
+  --font-display: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+
+  /* Küçük metin ölçeği — kart meta bilgisi (durum satırları, zaman damgaları)
+     için text-[11px]/text-[10px] gibi dağınık keyfi değerlerin yerine. */
+  --text-2xs: 0.6875rem; /* 11px */
+  --text-2xs--line-height: 1rem;
+  --text-3xs: 0.625rem; /* 10px */
+  --text-3xs--line-height: 0.875rem;
 }
 
 * {
@@ -71,7 +128,7 @@ body {
   height: 100%;
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-inter), system-ui, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -90,6 +147,16 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 .perspective-1000 { perspective: 1000px; }
