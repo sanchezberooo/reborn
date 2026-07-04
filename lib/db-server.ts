@@ -533,3 +533,174 @@ export async function deleteJournalEntry(userId: string, date: string): Promise<
   invalidateRetrievalCache()
   return true
 }
+
+// ─── Obsidian vault senkronu (Faz 2, Görev 5) ────────────────────────────────
+// Notlar 0001'in NATIVE modunda yaşar (type='note', source_table NULL —
+// goals'daki desenle aynı gerekçe, bkz. migration 0002 başlığı). Ama
+// Obsidian notlarının esas kaynağı disktir; hangi entity'nin hangi dosyaya
+// karşılık geldiği entities.source_table'da DEĞİL, ayrı bir bookkeeping
+// tablosunda (obsidian_sync_index, migration 0004) tutulur — böylece
+// ileride Obsidian dışı elle oluşturulan bir 'note' entity'si bu senkronun
+// silme/güncelleme taramasına hiç girmez.
+
+export interface ObsidianSyncResult {
+  created: number
+  updated: number
+  deleted: number
+  linked: number
+}
+
+/**
+ * Vault dosya listesinden (VaultFile[]) entity+link senkronu — saf DB
+ * mantığı, fs'e dokunmaz. syncObsidianVault (aşağıda) bunu gerçek kasadan
+ * okuyarak çağırır; testler (lib/obsidian-vault-sync.test.ts) sahte dosya
+ * listesiyle doğrudan çağırır.
+ *
+ * Sıra: (1) her not upsert edilir — içerik değişmediyse embedding yeniden
+ * hesaplanmaz ("dosya değişiminde yeniden işlenir" roadmap kriteri), (2)
+ * vault'ta artık olmayan yollar silinir, (3) her notun wikilink kenarları
+ * o an geçerli haliyle DEĞİŞTİRİLİR (eski kenarlar silinip yeniden yazılır)
+ * — idempotent, silinen bir [[link]] bir daha sonraki senkronda düşer.
+ */
+export async function syncObsidianVaultNotes(
+  userId: string,
+  files: import('./obsidian-sync').VaultFile[],
+): Promise<ObsidianSyncResult> {
+  const { parseVaultFiles } = await import('./obsidian-sync')
+  const { supabase, embedder } = await entityDeps()
+  const notes = parseVaultFiles(files)
+
+  const { data: indexRows, error: indexError } = await supabase
+    .from('obsidian_sync_index')
+    .select('vault_path, entity_id')
+    .eq('user_id', userId)
+  if (indexError) throw indexError
+  const indexByPath = new Map((indexRows ?? []).map((r) => [r.vault_path as string, r.entity_id as string]))
+
+  const entityIds = (indexRows ?? []).map((r) => r.entity_id as string)
+  const { data: entityRows, error: entityFetchError } =
+    entityIds.length > 0
+      ? await supabase.from('entities').select('id, content').in('id', entityIds)
+      : { data: [] as { id: string; content: string | null }[], error: null }
+  if (entityFetchError) throw entityFetchError
+  const contentById = new Map((entityRows ?? []).map((r) => [r.id as string, r.content as string | null]))
+
+  let created = 0
+  let updated = 0
+  const idByTitle = new Map<string, string>()
+  const currentPaths = new Set<string>()
+
+  for (const note of notes) {
+    currentPaths.add(note.relativePath)
+    const existingId = indexByPath.get(note.relativePath)
+
+    if (existingId) {
+      if (idByTitle.has(note.title)) {
+        console.warn(
+          `[obsidian-sync] birden fazla not aynı başlığı taşıyor: "${note.title}" — wikilink hedefi belirsiz, son işlenen kazanır.`,
+        )
+      }
+      idByTitle.set(note.title, existingId)
+
+      if (contentById.get(existingId) !== note.content) {
+        const [embedding] = await embedder.embed([`${note.title}\n\n${note.content}`])
+        const { error: updateError } = await supabase
+          .from('entities')
+          .update({ title: note.title, content: note.content, embedding, updated_at: new Date().toISOString() })
+          .eq('id', existingId)
+        if (updateError) throw updateError
+        updated++
+      }
+    } else {
+      const entity = await createEntity({ userId, type: 'note', title: note.title, content: note.content })
+      const { error: indexInsertError } = await supabase
+        .from('obsidian_sync_index')
+        .insert({ vault_path: note.relativePath, entity_id: entity.id, user_id: userId })
+      if (indexInsertError) throw indexInsertError
+
+      if (idByTitle.has(note.title)) {
+        console.warn(
+          `[obsidian-sync] birden fazla not aynı başlığı taşıyor: "${note.title}" — wikilink hedefi belirsiz, son işlenen kazanır.`,
+        )
+      }
+      idByTitle.set(note.title, entity.id)
+      created++
+    }
+  }
+
+  // Kasadan silinen dosyalar: indeksteydi, artık bu senkronda görülmedi.
+  // deleteEntity FK cascade ile obsidian_sync_index satırını da düşürür.
+  const toDelete = (indexRows ?? []).filter((r) => !currentPaths.has(r.vault_path as string))
+  for (const row of toDelete) {
+    await deleteEntity(row.entity_id as string)
+  }
+
+  // Wikilink kenarları: her not için baştan kurulur (idempotent — silinen
+  // bir referans bir daha yazılmaz).
+  let linked = 0
+  for (const note of notes) {
+    const sourceId = idByTitle.get(note.title)
+    if (!sourceId) continue // aynı başlık çakışmasında ikinci not atlanmış olabilir
+
+    const { error: deleteLinksError } = await supabase
+      .from('links')
+      .delete()
+      .eq('source_entity_id', sourceId)
+      .eq('kind', 'wikilink')
+    if (deleteLinksError) throw deleteLinksError
+
+    for (const target of note.wikilinks) {
+      const targetId = idByTitle.get(target)
+      if (!targetId || targetId === sourceId) continue // kasada yok ya da kendine referans
+      await createLink({ sourceEntityId: sourceId, targetEntityId: targetId, kind: 'wikilink' })
+      linked++
+    }
+  }
+
+  invalidateRetrievalCache()
+  return { created, updated, deleted: toDelete.length, linked }
+}
+
+/** Kasa dizinini özyinelemeli tarar, yalnız .md dosyalarını okur.
+ *  relativePath vault köküne göredir (obsidian_sync_index anahtarı). */
+async function readVaultFiles(vaultPath: string): Promise<import('./obsidian-sync').VaultFile[]> {
+  const fs = await import('node:fs/promises')
+  const path = await import('node:path')
+  const out: import('./obsidian-sync').VaultFile[] = []
+
+  async function walk(dir: string): Promise<void> {
+    const entries = await fs.readdir(dir, { withFileTypes: true })
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        await walk(full)
+      } else if (entry.isFile() && entry.name.endsWith('.md')) {
+        const content = await fs.readFile(full, 'utf-8')
+        out.push({ relativePath: path.relative(vaultPath, full), content })
+      }
+    }
+  }
+
+  await walk(vaultPath)
+  return out
+}
+
+/**
+ * Senkronun sunucu ucu: OBSIDIAN_VAULT_PATH'ten kasayı okur, syncObsidianVaultNotes'a
+ * devreder. Bağlantı yöntemi olarak dosya sistemi seçildi (Obsidian Local REST
+ * API eklentisine karşı) — gerekçe: (1) Next.js API route zaten aynı makinede
+ * çalışıyor, dosya okumak ek bir servisin (Obsidian uygulamasının açık ve
+ * eklentinin aktif olması) ayakta olmasını gerektirmiyor; (2) tek secret
+ * (env path) yeterli, REST API'nin kendi API anahtarı + genelde kendinden
+ * imzalı sertifika yönetimi gerekmiyor; (3) "silinen dosya" tespiti dizin
+ * taramasıyla doğrudan yapılabiliyor, REST API'de de ayrı bir liste uç
+ * noktasına ihtiyaç doğardı — kazanç yok, bağımlılık fazlası var.
+ */
+export async function syncObsidianVault(userId: string): Promise<ObsidianSyncResult> {
+  const vaultPath = process.env.OBSIDIAN_VAULT_PATH
+  if (!vaultPath) {
+    throw new Error('syncObsidianVault: OBSIDIAN_VAULT_PATH env değişkeni tanımlı değil.')
+  }
+  const files = await readVaultFiles(vaultPath)
+  return syncObsidianVaultNotes(userId, files)
+}
