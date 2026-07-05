@@ -11,6 +11,7 @@ import { usePathname } from 'next/navigation'
 import { Sparkles, LayoutGrid, Building2, Brain } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import SettingsPanel from './SettingsPanel'
+import GlobalSearch from './search/GlobalSearch'
 
 const items = [
   { href: '/', label: 'Sanchez', icon: Sparkles },
@@ -62,6 +63,8 @@ export default function AppNav() {
             )
           })}
         </div>
+
+        <GlobalSearch />
 
         <button
           onClick={() => setSettingsOpen(true)}
