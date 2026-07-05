@@ -226,3 +226,47 @@ export async function hybridRetrieve(
     .sort((x, y) => y.score - x.score)
     .slice(0, limit)
 }
+
+// ─── Global semantik arama (Faz 3) — hybridRetrieve'in UI'a bağlanan salt-
+// okunur ucu. Ayrı fonksiyon olmasının nedeni: arama sonucu kartı tam içerik
+// değil kısa bir özet ister; skor bileşenlerini (similarity/recencyBoost/
+// graphBoost) değil yalnız sıralama sonucu + kısa metni döner.
+
+const SEARCH_SNIPPET_LENGTH = 160
+const SEARCH_DEFAULT_LIMIT = 10
+
+export interface SearchResult {
+  id: string
+  type: EntityType
+  title: string
+  /** content'ten türetilmiş kısa özet; içerik yoksa null. */
+  snippet: string | null
+  score: number
+}
+
+function toSnippet(content: string | null): string | null {
+  if (!content) return null
+  const flat = content.replace(/\s+/g, ' ').trim()
+  if (!flat) return null
+  return flat.length > SEARCH_SNIPPET_LENGTH ? `${flat.slice(0, SEARCH_SNIPPET_LENGTH)}…` : flat
+}
+
+/** Boş sorguda embed çağrısı yapmadan erken döner (gereksiz iş yapmama). */
+export async function searchEntities(
+  query: string,
+  opts: RetrieveOptions,
+): Promise<SearchResult[]> {
+  const trimmed = query.trim()
+  if (!trimmed) return []
+
+  const limit = opts.limit ?? SEARCH_DEFAULT_LIMIT
+  const results = await hybridRetrieve(trimmed, { ...opts, limit })
+
+  return results.map((r) => ({
+    id: r.id,
+    type: r.type,
+    title: r.title,
+    snippet: toSnippet(r.content),
+    score: r.score,
+  }))
+}
