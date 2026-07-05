@@ -812,6 +812,52 @@ export async function dbSetModuleEnabled(
   return next
 }
 
+// ─── Dashboard kart düzeni (Görev: v0 customize/pin/span portu) ─────────────
+// Kart pin/span/arşiv tercihi profiles.module_settings içinde ayrı bir alt
+// anahtarda (_dashboard_cards) yaşar — aynı jsonb kolonu ModuleSettings'in
+// düz {[moduleId]: false} haritasıyla paylaşılır ama iç içe geçmez:
+// dbSetModuleEnabled'ın read-modify-write'ı (applyModuleToggle spread'i)
+// bu anahtarı olduğu gibi korur. Yeni migration gerekmez (kolon zaten var).
+
+export type DashboardCardLayout = { pinned?: boolean; archived?: boolean; span?: 'sm' | 'lg' }
+export type DashboardLayout = Record<string, DashboardCardLayout>
+
+const DASHBOARD_LAYOUT_KEY = '_dashboard_cards'
+
+export async function dbLoadDashboardLayout(): Promise<DashboardLayout> {
+  const userId = await uid()
+  const { data, error } = await db()
+    .from('profiles')
+    .select('module_settings')
+    .eq('id', userId)
+    .single()
+  if (error) return {}
+  const raw = (data?.module_settings as Record<string, unknown>) ?? {}
+  return (raw[DASHBOARD_LAYOUT_KEY] as DashboardLayout) ?? {}
+}
+
+export async function dbSetDashboardCardLayout(
+  cardId: string,
+  patch: DashboardCardLayout,
+): Promise<DashboardLayout> {
+  const userId = await uid()
+  const { data, error: readError } = await db()
+    .from('profiles')
+    .select('module_settings')
+    .eq('id', userId)
+    .single()
+  const current = (readError ? {} : (data?.module_settings as Record<string, unknown>) ?? {}) as Record<string, unknown>
+  const layout = (current[DASHBOARD_LAYOUT_KEY] as DashboardLayout) ?? {}
+  const nextLayout: DashboardLayout = { ...layout, [cardId]: { ...layout[cardId], ...patch } }
+  const next = { ...current, [DASHBOARD_LAYOUT_KEY]: nextLayout }
+  const { error } = await db()
+    .from('profiles')
+    .update({ module_settings: next, updated_at: new Date().toISOString() })
+    .eq('id', userId)
+  if (error) throw error
+  return nextLayout
+}
+
 // Entities & Links (Faz 1 — Unified Entity Core) yazma yolu artık lib/db-server.ts'te
 // yaşıyor: createEntity/createLink/deleteEntity, LocalEmbeddingProvider (transformers.js)
 // ve service-role admin client kullanır — bu dosya "use client" sayfalarından import

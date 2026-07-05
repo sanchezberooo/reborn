@@ -506,6 +506,71 @@ export async function deleteGoal(userId: string, id: string): Promise<boolean> {
   return true
 }
 
+// ─── Brain graf görünümü (roadmap §6.2: tek graf, ayrım erişim yolunda) ───────
+// Görsel graf için salt-okunur entities+links dökümü. Sorgu deseni lib/ai/
+// retrieval.ts'teki loadSnapshot ile aynı: admin client, entities user_id ile
+// filtrelenir, links'te user_id yok (şemada yok) — iki uçtan bu kullanıcının
+// entity setine daraltılarak filtrelenir. Embedding okunmaz (retrieval'ın işi
+// bu değil, sadece görselleştirme); layout/boyut/etiket hesaplaması
+// lib/brain-layout.ts'te (saf, client-safe) yapılır.
+
+export interface BrainGraphNode {
+  id: string
+  title: string
+  content: string | null
+  type: EntityType
+  createdAt: string
+  updatedAt: string
+}
+
+export interface BrainGraphEdge {
+  source: string
+  target: string
+  kind: LinkKind
+}
+
+export interface BrainGraph {
+  nodes: BrainGraphNode[]
+  edges: BrainGraphEdge[]
+}
+
+export async function getBrainGraph(userId: string): Promise<BrainGraph> {
+  const { supabase } = await entityDeps()
+  const { data: entityRows, error: entityError } = await supabase
+    .from('entities')
+    .select('id, title, content, type, created_at, updated_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true })
+    .limit(1000)
+  if (entityError) throw entityError
+
+  const nodes: BrainGraphNode[] = (entityRows ?? []).map((row) => ({
+    id: row.id as string,
+    title: row.title as string,
+    content: (row.content as string | null) ?? null,
+    type: row.type as EntityType,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  }))
+  const ids = new Set(nodes.map((n) => n.id))
+
+  const { data: linkRows, error: linkError } = await supabase
+    .from('links')
+    .select('source_entity_id, target_entity_id, kind')
+    .limit(5000)
+  if (linkError) throw linkError
+
+  const edges: BrainGraphEdge[] = (linkRows ?? [])
+    .filter((row) => ids.has(row.source_entity_id as string) && ids.has(row.target_entity_id as string))
+    .map((row) => ({
+      source: row.source_entity_id as string,
+      target: row.target_entity_id as string,
+      kind: row.kind as LinkKind,
+    }))
+
+  return { nodes, edges }
+}
+
 export async function deleteJournalEntry(userId: string, date: string): Promise<boolean> {
   const { supabase } = await entityDeps()
   const { data: row, error: lookupError } = await supabase
