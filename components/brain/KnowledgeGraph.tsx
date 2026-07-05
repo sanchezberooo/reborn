@@ -1,10 +1,12 @@
 'use client'
 
-// Brain bilgi grafiği — statik SVG mock (v0 portu, nötr dil). Gerçek veri
-// kaynağı entities/links tablolarıdır; bağlantı sonraki adımın işi.
+// Brain bilgi grafiği — SVG çizimi (v0 portu, nötr dil). Görselleştirme
+// mantığı DEĞİŞMEDİ; veri kaynağı artık statik mock import değil, gerçek
+// entities/links'ten türetilmiş props (bkz. lib/brain-layout.ts buildBrainView,
+// app/brain/page.tsx).
 
 import { useMemo, useState } from 'react'
-import { notes, edges, noteById, type Note } from '@/lib/brain-data'
+import type { Note } from '@/lib/brain-data'
 
 const sizeRadius: Record<Note['size'], number> = {
   hub: 13,
@@ -13,9 +15,15 @@ const sizeRadius: Record<Note['size'], number> = {
 }
 
 export default function KnowledgeGraph({
+  notes,
+  edges,
+  noteById,
   activeId,
   onSelect,
 }: {
+  notes: Note[]
+  edges: { source: string; target: string }[]
+  noteById: Record<string, Note>
   activeId: string | null
   onSelect: (note: Note) => void
 }) {

@@ -2,12 +2,14 @@
 
 // Brain — Reborn'un ikinci beyni (roadmap §6.1/4). v0 "obsidian" ekranının
 // portu; isim bilinçli olarak Brain: Obsidian yalnızca Brain'e veri sağlayan
-// kaynaklardan biridir. Veri şimdilik MOCK (lib/brain-data.ts); gerçek
-// kaynak entities/links/memories çekirdeğidir ve bağlantı sonraki adımın işi.
+// kaynaklardan biridir. Graf artık gerçek entities/links'ten geliyor (bkz.
+// app/brain/page.tsx, lib/brain-layout.ts); yalnız "Keşifler" ve "Günlük
+// notlar" panelleri hâlâ mock (gerçek analiz Faz AI'nın işi).
 
 import { useState } from 'react'
+import Link from 'next/link'
 import KnowledgeGraph from './KnowledgeGraph'
-import { notes, discoveries, dailyNotes, noteById } from '@/lib/brain-data'
+import { discoveries, dailyNotes, type Note } from '@/lib/brain-data'
 import SectionHeader from '@/components/SectionHeader'
 import {
   Brain as BrainIcon,
@@ -21,8 +23,25 @@ import {
   ArrowUpRight,
 } from 'lucide-react'
 
-export default function Brain() {
-  const [activeId, setActiveId] = useState<string | null>('burs')
+/** entityType → ilgili içeriğin yaşadığı modül rotası. Karşılığı olmayan
+ *  tipler (note, project, person, task, habit, resource, event) için henüz
+ *  ayrı bir görüntüleyici sayfa yok — o notlar yalnızca bu panelde açılır. */
+const TYPE_ROUTE: Partial<Record<NonNullable<Note['entityType']>, string>> = {
+  journal: '/dashboard/gunluk',
+  goal: '/dashboard/hedefler',
+  essay: '/dashboard/essay',
+}
+
+export default function Brain({
+  notes,
+  edges,
+  noteById,
+}: {
+  notes: Note[]
+  edges: { source: string; target: string }[]
+  noteById: Record<string, Note>
+}) {
+  const [activeId, setActiveId] = useState<string | null>(notes[0]?.id ?? null)
   const [query, setQuery] = useState('')
 
   const active = activeId ? noteById[activeId] : null
@@ -96,7 +115,19 @@ export default function Brain() {
             <span className="inline-block size-2 rounded-full bg-success" />
             Canlı bilgi grafiği
           </div>
-          <KnowledgeGraph activeId={activeId} onSelect={(n) => setActiveId(n.id)} />
+          {notes.length === 0 ? (
+            <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
+              Henüz bağlantılı bir kayıt yok — günlük, hedef veya not ekledikçe graf burada büyüyecek.
+            </div>
+          ) : (
+            <KnowledgeGraph
+              notes={notes}
+              edges={edges}
+              noteById={noteById}
+              activeId={activeId}
+              onSelect={(n) => setActiveId(n.id)}
+            />
+          )}
         </div>
 
         {/* Sağ — detay + keşifler */}
@@ -137,6 +168,16 @@ export default function Brain() {
               <p className="text-sm leading-relaxed text-muted-foreground">
                 {active.body}
               </p>
+
+              {active.entityType && TYPE_ROUTE[active.entityType] && (
+                <Link
+                  href={TYPE_ROUTE[active.entityType]!}
+                  className="mt-4 flex items-center gap-1.5 text-xs font-medium text-primary transition-opacity hover:opacity-80"
+                >
+                  İçeriğe git
+                  <ArrowUpRight className="size-3.5" strokeWidth={1.75} />
+                </Link>
+              )}
 
               <div className="mt-5 border-t border-border pt-4">
                 <p className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
