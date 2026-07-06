@@ -14,4 +14,4 @@ Built by Sanchez Bero, 18, Istanbul.
 Next.js 14 · TypeScript · Tailwind CSS · OpenAI API · Supabase
 
 ## Vision
-Every person has untapped potential. Reborn exists to unlock it.
+Every person has untapped potential Reborn exists to unlock it.
