@@ -27,7 +27,7 @@
 
 Toplam TS/TSX: **~15.400 satır** (`node_modules`, `.next` hariç).
 
-**Kök dizinde anomali:** `!lr[i])`, `` `[${m.date}] ``, `0`, `0)`, `{})`, `agent.toolNames.includes(t.name))`, `s.id` gibi 0 byte'lık dosyalar ve `console.log(w` adlı boş, git'e eklenmemiş bir dosya var. Bunlar muhtemelen önceki bir oturumda çok satırlı bir kod parçasının shell tarafından ayrı komutlar/dosya adları olarak yorumlanmasından kalma kalıntılar — kod işlevine etkisi yok, kozmetik temizlik gerektiriyor.
+**Kök dizinde anomali:** `!lr[i])`, `` `[${m.date}] ``, `0`, `0)`, `{})`, `agent.toolNames.includes(t.name))`, `s.id` gibi 0 byte'lık dosyalar ve `console.log(w` adlı boş, git'e eklenmemiş bir dosya var. Bunlar muhtemelen önceki bir oturumda çok satırlı bir kod parçasının shell tarafından ayrı komutlar/dosya adları olarak yorumlanmasından kalma kalıntılar — kod işlevine etkisi yok, kozmetik temizlik gerektiriyor
 
 ---
 
