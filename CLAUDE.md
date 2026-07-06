@@ -2,7 +2,7 @@
 
 # REBORN — Claude Code Anayasası
 
-## 1. Proje Özeti
+## 1 Proje Özeti
 
 Reborn, tek bir kullanıcı (Bero) için inşa edilen kişisel bir **Life Operating System**: journal, hedefler, alışkanlıklar ve tüm yaşam verisi tek bağlantılı hafızada toplanır. **Sanchez**, bu sistemin kullanıcıya dönük tek AI muhatabıdır — mentor kimlikli, soru soran, hatırlayan bir karakter. Temel soru: **"Kim olmak istiyorsun ve AI buna nasıl yardım eder?"** Çekirdek ürün modüller değil, hafıza katmanıdır. Tek referans doküman: `docs/reborn-master-roadmap.md` (v1.1).
 
