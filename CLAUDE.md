@@ -80,4 +80,4 @@ Sıfırdan yazım YOK; mevcut kod aşamalı evrimleşir. Aşağıda durumu belir
 | `faz0-denetim-raporu.md` | Mevcut kodun tam haritası, koru/refactor/yeniden-yaz matrisi, AIProvider geçiş planı (§4.2). Mevcut yapıya dokunan her görevde. |
 | `reborn-vision.md` | Ürün vizyonu ve ilkeler. Bir kararın "ruhundan" emin olamadığında. |
 | `kisisel-arsiv.md` | Bero'nun kişisel bağlamı. Sanchez karakteri/prompt işlerinde. |
-| `roadmap.md` | ESKİ roadmap — güncel değil, referans alma; master-roadmap esastır. |
+| `roadmap.md` | ESKİ roadmap — güncel değil, referans alma; master-roadmap esastır |
