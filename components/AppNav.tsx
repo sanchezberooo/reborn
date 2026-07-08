@@ -1,7 +1,7 @@
 'use client'
 
 // Navigasyon v1 (UI v1, nötr dil) — 4 kalıcı bölüm: Sanchez, Dashboard,
-// Office, Brain (roadmap §6.1). Yeni üst seviye sekme EKLENMEZ; büyüme bu
+// MAXAİ, Brain (roadmap §6.1). Yeni üst seviye sekme EKLENMEZ; büyüme bu
 // dördünün içinde olur. Ayarlar 5. sekme değildir — sol alttaki profil
 // avatarından açılan panelde yaşar (SettingsPanel).
 
@@ -16,7 +16,7 @@ import GlobalSearch from './search/GlobalSearch'
 const items = [
   { href: '/', label: 'Sanchez', icon: Sparkles },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutGrid },
-  { href: '/office', label: 'Office', icon: Building2 },
+  { href: '/maxai', label: 'MAXAİ', icon: Building2 },
   { href: '/brain', label: 'Brain', icon: Brain },
 ]
 

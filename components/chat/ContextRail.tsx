@@ -98,7 +98,7 @@ export default function ContextRail() {
         </div>
       </Panel>
 
-      <Panel title="Çalışan ajanlar" action={{ label: 'Office', href: '/office' }}>
+      <Panel title="Çalışan ajanlar" action={{ label: 'MAXAİ', href: '/maxai' }}>
         <div className="flex flex-col gap-3">
           {runningAgents.map((a) => (
             <div key={a.name} className="rounded-lg border border-border bg-background/40 p-3">
