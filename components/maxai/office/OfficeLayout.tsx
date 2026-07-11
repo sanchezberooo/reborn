@@ -1,16 +1,35 @@
-// MAXAİ Ofis — bit-office (github.com/longyangxi/bit-office) varsayılan "Retro"
-// ofisinin mimari planının tile-grid klonu, Reborn görünümüne uyarlanmış hali.
-// Plan birebir referanstan: 4 köşe odası (sol üst büyük çalışma alanı, sağ üst
-// oda, sol alt oda, sağ alt oda), odaları bağlayan merkez hol + dikey koridor,
-// üst-orta ve alt-orta void girintileri. Oda anlamları MAXAİ'ye göre atandı:
-// sağ üst = Brain (parlak küre), sol alt = Lounge (karşılıklı koltuklar),
-// sol üst = Çalışma Alanı (Knowledge + Marketing), sağ alt = Sanchez Komuta.
-//
-// Duvarlar gri, zemin beyaz; bina dışında uzay/yıldız arka planı korunur.
-// Tamamen client-side statik SVG — asset yok, backend yok.
+'use client'
 
-const COLS = 32
-const ROWS = 32
+// MAXAİ Ofis — bit-office referanslı kat planının FERAHLATILMIŞ hali: 40×31
+// tile grid (eski 32×32'den geniş), büyük odalar, 4 tile genişliğinde hol,
+// geniş koridorlar. Oda anlamları: sol üst = Çalışma Alanı (registry
+// ajanları), sağ üst = Brain (parlak küre), sol alt = Lounge, sağ alt =
+// Sanchez Komuta.
+//
+// CANLI VERİ: avatarlar lib/agents/registry.ts'teki gerçek ajanlardır
+// (/api/agents/list); durumları /api/agents/runs'tan 5 sn'de bir çekilir.
+// Masa sayısı = gerçek ajan sayısı (boş "büyüme masası" yok). Durum dili
+// renk+ikon+metin üçlüsüdür (StatusBadge) — masa altında ve alt status
+// bar'da aynı component. Avatar çizimi AgentAvatar.tsx'te (rol rozetli
+// geometrik dil). Sanchez registry ajanı değil (chat orkestratörü) —
+// Komuta odasında sabit, koşu rozeti almaz, tıklanamaz.
+//
+// ETKİLEŞİM: masa/avatar tıklanınca AgentDetailPanel açılır (geniş ekranda
+// sağda yan panel, dar ekranda alttan sheet). selectedAgent local state'tir:
+// tek tüketicisi bu sahne, polling verisi de burada — global store gereksiz.
+// Sahnenin boş bir yerine tıklamak paneli kapatır.
+//
+// Bina dışında uzay/yıldız arka planı korunur (bilinçli tercih); odaların
+// içi aydınlık — kasvet içeride değil, dışarıda kalır.
+
+import { useEffect, useState } from 'react'
+import AgentAvatar, { AGENT_AVATAR_VISUALS, FALLBACK_AVATAR_VISUAL } from './AgentAvatar'
+import AgentDetailPanel from './AgentDetailPanel'
+import StatusBadge, { statusFromRun, type AgentStatus } from './StatusBadge'
+import { fmtRelative, runSummary, type AgentMeta, type AgentRun } from './office-data'
+
+const COLS = 40
+const ROWS = 31
 const T = 8 // SVG birimi / tile
 
 // ── kat planı ─────────────────────────────────────────────────────────────────
@@ -18,17 +37,16 @@ const T = 8 // SVG birimi / tile
 // çizilmez: zemine 8-komşulukla değen her boş hücre otomatik duvar olur. Böylece
 // kapılar = iki bölgeyi köprüleyen zemin hücreleri; plan tutarlılığı garantili.
 const FLOOR_RECTS: Array<{ x: number; y: number; w: number; h: number }> = [
-  { x: 2, y: 2, w: 14, h: 12 },   // sol üst: çalışma alanı
-  { x: 20, y: 2, w: 10, h: 8 },   // sağ üst: Brain odası
-  { x: 24, y: 10, w: 2, h: 1 },   // Brain kapısı (güneye, hole)
-  { x: 20, y: 11, w: 10, h: 4 },  // Brain altı hol bandı (yazıcı/otomat nişi)
-  { x: 12, y: 14, w: 2, h: 1 },   // çalışma alanı kapısı (güneye, hole)
-  { x: 10, y: 15, w: 20, h: 3 },  // merkez hol (yatay)
-  { x: 14, y: 18, w: 4, h: 7 },   // dikey koridor (hol → alt odalar)
-  { x: 2, y: 19, w: 11, h: 11 },  // sol alt: Lounge
-  { x: 13, y: 21, w: 1, h: 2 },   // Lounge kapısı (doğuya, koridora)
-  { x: 19, y: 19, w: 11, h: 11 }, // sağ alt: Sanchez Komuta
-  { x: 18, y: 21, w: 1, h: 2 },   // Komuta kapısı (batıya, koridora)
+  { x: 2, y: 2, w: 20, h: 13 },   // sol üst: çalışma alanı
+  { x: 11, y: 15, w: 2, h: 1 },   // çalışma alanı kapısı (güneye, hole)
+  { x: 26, y: 2, w: 12, h: 9 },   // sağ üst: Brain odası
+  { x: 30, y: 11, w: 3, h: 5 },   // Brain koridoru (güneye, hole)
+  { x: 8, y: 16, w: 28, h: 4 },   // merkez hol (yatay, 4 tile ferah)
+  { x: 16, y: 20, w: 4, h: 6 },   // dikey koridor (hol → alt odalar)
+  { x: 2, y: 22, w: 12, h: 8 },   // sol alt: Lounge
+  { x: 14, y: 24, w: 2, h: 2 },   // Lounge kapısı (doğuya, koridora)
+  { x: 22, y: 22, w: 14, h: 8 },  // sağ alt: Sanchez Komuta
+  { x: 20, y: 24, w: 2, h: 2 },   // Komuta kapısı (batıya, koridora)
 ]
 
 function buildGrid(): { floor: boolean[][]; wall: boolean[][] } {
@@ -76,23 +94,23 @@ const FLOOR_RUNS = rowRuns(FLOOR)
 const WALL_RUNS = rowRuns(WALL)
 
 // ── renkler ───────────────────────────────────────────────────────────────────
+// İç mekân bilinçli AYDINLIK: zemin beyaz, grid çok soluk, duvarlar açık gri.
 const C = {
-  floor: '#fafafa',
-  grid: '#94a3b8',
-  wall: '#a4abb6',
-  wallEdge: '#7d8590',
-  deskTop: '#cbd5e1',
+  floor: '#ffffff',
+  grid: '#b0bac9',
+  wall: '#aeb5c0',
+  wallEdge: '#8b93a0',
+  deskTop: '#d7dee8',
   deskEdge: '#64748b',
   monitor: '#1e293b',
   screen: '#67e8f9',
-  chair: '#94a3b8',
-  sofa: '#c7cdd6',
+  chair: '#9aa6b5',
+  sofa: '#ccd2db',
   sofaEdge: '#8e97a3',
-  label: '#b6bcc6',
-  name: '#334155',
+  sign: '#eef1f6',
   plantPot: '#9ca3af',
   plantLeaf: '#34d399',
-  metal: '#b0b7c3',
+  metal: '#b7bec9',
   metalEdge: '#828a96',
 }
 
@@ -222,72 +240,101 @@ function WallScreens({ x, y }: { x: number; y: number }) {
 }
 
 // ── Brain küresi ──────────────────────────────────────────────────────────────
+// İki mod: sakin (varsayılan yavaş nabız) ve aktif (son ~10 sn'de gerçek bir
+// hibrit retrieval koştu — /api/brain/activity). Aktifte nabız hızlanır
+// (1.2s), yörünge hızlanır (5s), halo + çekirdek mor doygunluğu artar; mod
+// geçişini 800ms opacity transition'lı katmanlar yumuşatır (animasyon sınıfı
+// anahtarlaması tek başına sert görünürdü).
 
-function BrainSphere({ x, y }: { x: number; y: number }) {
+function BrainSphere({ x, y, active }: { x: number; y: number; active: boolean }) {
   return (
     <g>
       {/* zemin halkası */}
-      <circle cx={x} cy={y} r={2.7} fill="#ede9fe" opacity={0.55} />
-      <circle cx={x} cy={y} r={2.7} fill="none" stroke="#c4b5fd" strokeWidth={0.16} opacity={0.8} />
+      <circle cx={x} cy={y} r={3.0} fill="#ede9fe" opacity={0.55} />
+      <circle cx={x} cy={y} r={3.0} fill="none" stroke="#c4b5fd" strokeWidth={0.16} opacity={0.8} />
+      {/* aktif halo: yumuşak geçişi veren sabit parlaklık katmanı */}
+      <circle
+        cx={x} cy={y} r={2.85} fill="url(#brainGlow)"
+        opacity={active ? 0.75 : 0}
+        style={{ transition: 'opacity 800ms ease' }}
+      />
       {/* dış glow (nabız) */}
-      <circle className="maxai-brain-pulse" cx={x} cy={y} r={2.2} fill="url(#brainGlow)" />
+      <circle
+        className={active ? 'maxai-brain-pulse-active' : 'maxai-brain-pulse'}
+        cx={x} cy={y} r={2.45} fill="url(#brainGlow)"
+      />
       {/* yörünge halkası */}
       <circle
-        className="maxai-brain-orbit"
-        cx={x} cy={y} r={1.85}
+        className={active ? 'maxai-brain-orbit-active' : 'maxai-brain-orbit'}
+        cx={x} cy={y} r={2.05}
         fill="none" stroke="#a78bfa" strokeWidth={0.09}
         strokeDasharray="0.55 0.75" opacity={0.75}
         style={{ transformOrigin: 'center', transformBox: 'fill-box' }}
       />
-      {/* çekirdek */}
-      <circle cx={x} cy={y} r={1.25} fill="url(#brainCore)" />
-      <circle cx={x - 0.4} cy={y - 0.45} r={0.28} fill="#ffffff" opacity={0.85} />
+      {/* çekirdek + aktifte mor doygunlaşma */}
+      <circle cx={x} cy={y} r={1.4} fill="url(#brainCore)" />
+      <circle
+        cx={x} cy={y} r={1.4} fill="#7c3aed"
+        opacity={active ? 0.3 : 0}
+        style={{ transition: 'opacity 800ms ease' }}
+      />
+      <circle cx={x - 0.45} cy={y - 0.5} r={0.3} fill="#ffffff" opacity={0.85} />
     </g>
   )
 }
 
-// ── Among Us tarzı avatar ─────────────────────────────────────────────────────
-
-function Avatar({ x, y, body, dark, name }: { x: number; y: number; body: string; dark: string; name: string }) {
-  return (
-    <g>
-      <ellipse cx={x + 0.8} cy={y + 2.12} rx={0.78} ry={0.17} fill="#0f172a" opacity={0.14} />
-      <g className="maxai-bob">
-        {/* sırt çantası */}
-        <rect x={x - 0.18} y={y + 0.55} width={0.42} height={1.0} rx={0.16} fill={dark} />
-        {/* bacaklar */}
-        <rect x={x + 0.2} y={y + 1.5} width={0.5} height={0.56} rx={0.14} fill={body} stroke={dark} strokeWidth={0.07} />
-        <rect x={x + 0.92} y={y + 1.5} width={0.5} height={0.56} rx={0.14} fill={body} stroke={dark} strokeWidth={0.07} />
-        {/* gövde (fasulye) */}
-        <rect x={x + 0.14} y={y} width={1.34} height={1.72} rx={0.62} fill={body} stroke={dark} strokeWidth={0.09} />
-        {/* vizör */}
-        <rect x={x + 0.6} y={y + 0.4} width={0.92} height={0.58} rx={0.28} fill="#d6ecf9" stroke={dark} strokeWidth={0.08} />
-        <rect x={x + 0.76} y={y + 0.5} width={0.34} height={0.18} rx={0.09} fill="#ffffff" opacity={0.9} />
-      </g>
-      <text
-        x={x + 0.8} y={y + 2.75} textAnchor="middle"
-        fontSize={0.72} fontWeight={700} letterSpacing="0.06em"
-        fill={C.name} stroke="#ffffff" strokeWidth={0.16}
-        style={{ paintOrder: 'stroke', textTransform: 'uppercase', fontFamily: 'system-ui, sans-serif' }}
-      >
-        {name}
-      </text>
-    </g>
-  )
-}
-
-function RoomLabel({ x, y, text }: { x: number; y: number; text: string }) {
+// Oda tabelası: duvar sırasının üstünde açık renk yazı
+function RoomSign({ x, y, text }: { x: number; y: number; text: string }) {
   return (
     <text
       x={x} y={y} textAnchor="middle"
       fontSize={0.78} fontWeight={700} letterSpacing="0.22em"
-      fill={C.label}
+      fill={C.sign} opacity={0.9}
       style={{ textTransform: 'uppercase', fontFamily: 'system-ui, sans-serif' }}
     >
       {text}
     </text>
   )
 }
+
+// ── SVG içinde StatusBadge ────────────────────────────────────────────────────
+// HTML rozet foreignObject ile sahneye gömülür. İçerik 16× büyük çizilip
+// transform'la küçültülür: tarayıcıların küçük font clamp'ine takılmadan
+// keskin metin verir. Genişlik rozeti ortalamak için sabittir.
+
+const BADGE_SCALE = 1 / 16
+const BADGE_W = 120
+const BADGE_H = 22
+
+function SvgStatusBadge({ cx, y, status }: { cx: number; y: number; status: AgentStatus }) {
+  return (
+    <foreignObject
+      width={BADGE_W}
+      height={BADGE_H}
+      transform={`translate(${cx - (BADGE_W * BADGE_SCALE) / 2} ${y}) scale(${BADGE_SCALE})`}
+    >
+      <div className="flex justify-center">
+        <StatusBadge status={status} />
+      </div>
+    </foreignObject>
+  )
+}
+
+// ── canlı ajan durumu (registry + agent_runs) ────────────────────────────────
+// Tipler ve fmtRelative/runSummary yardımcıları office-data.ts'te
+// (AgentDetailPanel ile paylaşılıyor).
+
+const POLL_MS = 5000
+/** Son retrieval bu pencerenin içindeyse Brain küresi "aktif" moda geçer. */
+const BRAIN_ACTIVE_WINDOW_MS = 10_000
+
+/** Çalışma alanı masa slotları: 4 + 3 dizilim, masalar arası gerçek boşluk
+ *  (yatay 4.8, dikey 6.0 tile). Masa sayısı = gerçek ajan sayısı; boş
+ *  "büyüme masası" yok — masa yalnız ajanıyla birlikte çizilir. */
+const DESK_SLOTS: Array<{ x: number; y: number }> = [
+  { x: 2.8, y: 3.3 }, { x: 7.6, y: 3.3 }, { x: 12.4, y: 3.3 }, { x: 17.2, y: 3.3 },
+  { x: 5.2, y: 9.3 }, { x: 10.0, y: 9.3 }, { x: 14.8, y: 9.3 },
+]
 
 // ── uzay arka planı (önceki sahneden korunuyor) ───────────────────────────────
 
@@ -316,9 +363,62 @@ const NEAR_STARS = {
 // ── sahne ─────────────────────────────────────────────────────────────────────
 
 export default function OfficeLayout() {
+  const [agents, setAgents] = useState<AgentMeta[]>([])
+  const [runs, setRuns] = useState<AgentRun[]>([])
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null)
+  const [brainActive, setBrainActive] = useState(false)
+
+  // Registry bir kez; koşular + brain aktivitesi 5 sn'de bir (koşu chat/panel
+  // gibi başka bir yüzeyden de başlayabildiği için polling koşulsuz — istekler
+  // tek ve hafif; WebSocket bilinçli yok, mevcut döngü yeterli).
+  useEffect(() => {
+    let alive = true
+    fetch('/api/agents/list')
+      .then((r) => r.json())
+      .then((list: AgentMeta[]) => { if (alive) setAgents(list) })
+      .catch(() => {})
+
+    const loadRuns = () =>
+      fetch('/api/agents/runs')
+        .then((r) => r.json())
+        .then((data: AgentRun[]) => { if (alive && Array.isArray(data)) setRuns(data) })
+        .catch(() => {})
+    // Aktiflik boolean olarak state'e yazılır (timestamp değil): pencere
+    // dolunca değer false'a döner ve render tetiklenir — aynı timestamp'i
+    // saklamak React bail-out'u yüzünden küreyi aktif modda dondururdu.
+    const loadBrain = () =>
+      fetch('/api/brain/activity')
+        .then((r) => r.json())
+        .then((data: { lastRetrievalAt: number | null }) => {
+          if (!alive) return
+          setBrainActive(
+            typeof data.lastRetrievalAt === 'number' &&
+            Date.now() - data.lastRetrievalAt < BRAIN_ACTIVE_WINDOW_MS,
+          )
+        })
+        .catch(() => {})
+    const tick = () => { loadRuns(); loadBrain() }
+    tick()
+    const id = setInterval(tick, POLL_MS)
+    return () => { alive = false; clearInterval(id) }
+  }, [])
+
+  // Ajan başına son koşu (runs started_at DESC sıralı geliyor).
+  const latestByAgent: Record<string, AgentRun> = {}
+  for (const run of runs) latestByAgent[run.agent_name] ??= run
+
+  const lastRun = runs[0]
+  const lastRunAgent = lastRun
+    ? agents.find((a) => a.name === lastRun.agent_name)?.displayName ?? lastRun.agent_name
+    : null
+
+  const selectedAgent = agents.find((a) => a.name === selectedAgentId) ?? null
+
   return (
+    <div className="flex h-full min-h-[520px] w-full">
     <div
-      className="relative h-full min-h-[520px] w-full overflow-hidden"
+      className="relative min-w-0 flex-1 overflow-hidden"
+      onClick={() => setSelectedAgentId(null)}
       style={{
         background: 'radial-gradient(ellipse at center, #131b3a 0%, #070a16 55%, #000000 100%)',
       }}
@@ -336,17 +436,30 @@ export default function OfficeLayout() {
         }
         .maxai-brain-pulse { animation: maxaiBrainPulse 3.2s ease-in-out infinite; }
 
+        @keyframes maxaiBrainPulseActive {
+          0%, 100% { opacity: 0.65; }
+          50% { opacity: 1; }
+        }
+        .maxai-brain-pulse-active { animation: maxaiBrainPulseActive 1.2s ease-in-out infinite; }
+
         @keyframes maxaiOrbit {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
         }
         .maxai-brain-orbit { animation: maxaiOrbit 16s linear infinite; }
+        .maxai-brain-orbit-active { animation: maxaiOrbit 5s linear infinite; }
 
         @keyframes maxaiBob {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-0.14px); }
         }
         .maxai-bob { animation: maxaiBob 2.4s ease-in-out infinite; }
+
+        @keyframes maxaiWorkPulse {
+          0%, 100% { opacity: 0.25; }
+          50% { opacity: 0.95; }
+        }
+        .maxai-work-pulse { animation: maxaiWorkPulse 1.6s ease-in-out infinite; }
       `}</style>
 
       <div className="pointer-events-none absolute inset-0" style={FAR_STARS} />
@@ -381,70 +494,133 @@ export default function OfficeLayout() {
               <rect key={`f${i}`} x={r.x} y={r.y} width={r.w} height={1} fill={C.floor} />
             ))}
             {FLOOR_RUNS.map((r, i) => (
-              <rect key={`g${i}`} x={r.x} y={r.y} width={r.w} height={1} fill="url(#floorGrid)" opacity={0.16} />
+              <rect key={`g${i}`} x={r.x} y={r.y} width={r.w} height={1} fill="url(#floorGrid)" opacity={0.1} />
             ))}
             {WALL_RUNS.map((r, i) => (
               <rect key={`w${i}`} x={r.x} y={r.y} width={r.w} height={1} fill={C.wall} stroke={C.wallEdge} strokeWidth={0.09} />
             ))}
           </g>
 
-          {/* ── sol üst: Çalışma Alanı ── */}
-          <Whiteboard x={6} y={1.1} w={4} />
-          <Cabinet x={13} y={2.1} />
-          <Cabinet x={14} y={2.1} />
-          <Plant x={2.2} y={2.1} />
-          <Plant x={2.2} y={11.5} />
-          <Desk x={4} y={3.5} />
-          <Desk x={10} y={3.5} />
-          <Desk x={4} y={8.5} />
-          <Desk x={10} y={8.5} />
-          <RoomLabel x={9} y={13.45} text="Çalışma Alanı" />
-          <Avatar x={7.2} y={4.1} body="#06b6d4" dark="#0e7490" name="Knowledge" />
-          <Avatar x={13.1} y={9.0} body="#ec4899" dark="#be185d" name="Marketing" />
+          {/* ── sol üst: Çalışma Alanı — registry ajanları, canlı durum ──
+              7 slot (4+3 dizilim, geniş aralık); masa yalnız gerçek ajan
+              için çizilir. Rozet: masa altında StatusBadge (foreignObject). */}
+          <RoomSign x={5.5} y={1.78} text="Çalışma Alanı" />
+          <Whiteboard x={10} y={1.1} w={5} />
+          {agents.slice(0, DESK_SLOTS.length).map((agent, i) => {
+            const slot = DESK_SLOTS[i]
+            const visual =
+              AGENT_AVATAR_VISUALS[agent.name] ??
+              { label: agent.displayName.slice(0, 10), ...FALLBACK_AVATAR_VISUAL }
+            const status = statusFromRun(latestByAgent[agent.name]?.status)
+            const isSelected = selectedAgentId === agent.name
+            const select = () =>
+              setSelectedAgentId((cur) => (cur === agent.name ? null : agent.name))
+            return (
+              <g
+                key={agent.name}
+                role="button"
+                tabIndex={0}
+                aria-label={`${agent.displayName} detayını aç`}
+                className="cursor-pointer focus:outline-none"
+                onClick={(e) => { e.stopPropagation(); select() }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select() }
+                }}
+              >
+                {/* görünmez tıklama alanı: masa + avatar + rozetin tamamı */}
+                <rect x={slot.x - 0.35} y={slot.y - 1.05} width={3.7} height={6.2} fill="transparent" />
+                {isSelected && (
+                  <rect
+                    x={slot.x - 0.35} y={slot.y - 1.05} width={3.7} height={6.2} rx={0.35}
+                    fill="none" stroke="#67e8f9" strokeWidth={0.12}
+                    strokeDasharray="0.5 0.35" opacity={0.9}
+                  />
+                )}
+                <Desk x={slot.x} y={slot.y} />
+                <AgentAvatar
+                  x={slot.x + 0.85}
+                  y={slot.y + 0.65}
+                  body={visual.body}
+                  dark={visual.dark}
+                  name={visual.label}
+                  variant={visual.variant}
+                  status={status}
+                  labelSize={0.56}
+                />
+                <SvgStatusBadge cx={slot.x + 1.65} y={slot.y + 3.55} status={status} />
+              </g>
+            )
+          })}
 
           {/* ── sağ üst: Brain odası ── */}
-          <BrainSphere x={25} y={5.7} />
-          <Plant x={20.3} y={2.1} />
-          <Plant x={28.5} y={2.1} />
-          <RoomLabel x={25} y={9.55} text="Brain" />
+          <RoomSign x={32} y={1.78} text="Brain" />
+          <BrainSphere x={32} y={6.2} active={brainActive} />
+          <Plant x={26.6} y={2.4} />
+          <Plant x={36.2} y={2.4} />
 
-          {/* ── hol: yazıcı nişi + otomat + su sebili ── */}
-          <Printer x={20.3} y={11.4} />
-          <Vending x={28.3} y={11.2} />
-          <Cooler x={24} y={16.6} />
-          <Plant x={10.3} y={15.4} />
+          {/* ── hol: su sebili + bitki + yazıcı + otomat ── */}
+          <Cooler x={9.5} y={17.2} />
+          <Plant x={12.5} y={16.5} />
+          <Printer x={31.5} y={17} />
+          <Vending x={33.6} y={16.8} />
 
           {/* ── sol alt: Lounge ── */}
-          <rect x={3.4} y={20.4} width={8.2} height={7.9} rx={0.3} fill="#f0f1f4" />
-          <Sofa x={4.8} y={20.9} facing="down" />
-          <Sofa x={4.8} y={26.1} facing="up" />
-          <CoffeeTable x={6.2} y={23.6} />
-          <Armchair x={2.6} y={23.35} />
-          <Armchair x={10.9} y={23.35} />
-          <Plant x={2.3} y={19.2} />
-          <RoomLabel x={7.5} y={29.5} text="Lounge" />
+          <RoomSign x={8} y={21.78} text="Lounge" />
+          <rect x={3} y={23} width={8.5} height={5.4} rx={0.3} fill="#f2f3f6" />
+          <Sofa x={4.5} y={23.4} facing="down" />
+          <Sofa x={4.5} y={26.9} facing="up" />
+          <CoffeeTable x={5.9} y={25.3} />
+          <Armchair x={2.5} y={25.0} />
+          <Armchair x={10.7} y={25.0} />
+          <Plant x={2.4} y={22.3} />
 
           {/* ── sağ alt: Sanchez Komuta ── */}
-          <WallScreens x={22} y={19.15} />
-          <Cabinet x={19.3} y={19.5} />
-          <Cabinet x={20.25} y={19.5} />
+          <RoomSign x={29} y={21.78} text="Komuta" />
+          <WallScreens x={26} y={22.2} />
+          <Cabinet x={22.4} y={22.5} />
+          <Cabinet x={23.35} y={22.5} />
           {/* komuta masası: daha büyük masa + 3 ekran */}
           <g>
-            <rect x={21.5} y={21.7} width={6} height={1.5} rx={0.12} fill={C.deskTop} stroke={C.deskEdge} strokeWidth={0.09} />
-            <rect x={23.7} y={20.65} width={1.6} height={1.15} rx={0.08} fill={C.monitor} />
-            <rect x={23.85} y={20.8} width={1.3} height={0.8} fill={C.screen} opacity={0.9} />
-            <rect x={22.1} y={20.9} width={1.25} height={0.95} rx={0.08} fill={C.monitor} />
-            <rect x={22.22} y={21.02} width={1.0} height={0.65} fill={C.screen} opacity={0.75} />
-            <rect x={25.65} y={20.9} width={1.25} height={0.95} rx={0.08} fill={C.monitor} />
-            <rect x={25.77} y={21.02} width={1.0} height={0.65} fill={C.screen} opacity={0.75} />
-            <rect x={24.1} y={22.05} width={0.85} height={0.24} rx={0.06} fill={C.deskEdge} opacity={0.55} />
-            <rect x={24.05} y={23.5} width={0.95} height={0.9} rx={0.2} fill={C.chair} stroke={C.deskEdge} strokeWidth={0.07} />
+            <rect x={25.7} y={24.7} width={6} height={1.5} rx={0.12} fill={C.deskTop} stroke={C.deskEdge} strokeWidth={0.09} />
+            <rect x={27.9} y={23.65} width={1.6} height={1.15} rx={0.08} fill={C.monitor} />
+            <rect x={28.05} y={23.8} width={1.3} height={0.8} fill={C.screen} opacity={0.9} />
+            <rect x={26.3} y={23.9} width={1.25} height={0.95} rx={0.08} fill={C.monitor} />
+            <rect x={26.42} y={24.02} width={1.0} height={0.65} fill={C.screen} opacity={0.75} />
+            <rect x={29.85} y={23.9} width={1.25} height={0.95} rx={0.08} fill={C.monitor} />
+            <rect x={29.97} y={24.02} width={1.0} height={0.65} fill={C.screen} opacity={0.75} />
+            <rect x={28.3} y={25.05} width={0.85} height={0.24} rx={0.06} fill={C.deskEdge} opacity={0.55} />
+            <rect x={28.25} y={26.5} width={0.95} height={0.9} rx={0.2} fill={C.chair} stroke={C.deskEdge} strokeWidth={0.07} />
           </g>
-          <Plant x={28.6} y={27.8} />
-          <RoomLabel x={24.5} y={29.5} text="Komuta" />
-          <Avatar x={25.9} y={23.9} body="#f59e0b" dark="#b45309" name="Sanchez" />
+          <Plant x={34.4} y={28.0} />
+          <AgentAvatar x={30.6} y={25.9} body="#f59e0b" dark="#b45309" name="Sanchez" variant="yildiz" />
         </g>
       </svg>
+
+      {/* alt status bar — son koşu (gerçek agent_runs verisi) */}
+      <div className="absolute inset-x-0 bottom-0 z-20 flex items-center gap-2 border-t border-white/10 bg-black/55 px-4 py-2 backdrop-blur-sm">
+        {lastRun ? (
+          <>
+            <StatusBadge status={statusFromRun(lastRun.status)} className="shrink-0" />
+            <p className="truncate text-2xs text-white/70">
+              <span className="font-semibold text-white/90">{lastRunAgent}</span>
+              {' · '}
+              {runSummary(lastRun)}
+              {' · '}
+              {fmtRelative(lastRun.started_at)}
+            </p>
+          </>
+        ) : (
+          <p className="text-2xs text-white/60">
+            <span className="mr-1.5 inline-block size-1.5 rounded-full bg-white/30 align-middle" />
+            Ofis hazır, henüz koşu yok — bir ajana tıklayıp detayından başlayabilirsin.
+          </p>
+        )}
+      </div>
+    </div>
+
+    {selectedAgent && (
+      <AgentDetailPanel agent={selectedAgent} onClose={() => setSelectedAgentId(null)} />
+    )}
     </div>
   )
 }

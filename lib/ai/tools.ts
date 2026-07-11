@@ -72,7 +72,7 @@ export const TOOLS: AIToolDef[] = [
   },
   {
     name: 'save_memory',
-    description: "Bero hakkında önemli bir bilgiyi memories tablosuna kaydeder.",
+    description: "Bero hakkında önemli bir bilgiyi hafızaya kaydeder (memories + Brain'e embedding'li entity — sonraki sohbetlerde retrieval ile bağlama geri gelir).",
     inputSchema: {
       type: 'object',
       properties: {

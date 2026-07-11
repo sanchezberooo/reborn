@@ -24,13 +24,6 @@ export async function POST(req: Request) {
   const profileResult = await adminClient.from('profiles').select('*').limit(1).single()
   const userId = profileResult.data?.id ?? ''
 
-  const memoriesResult = await adminClient
-    .from('memories')
-    .select('id, summary, date')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(5)
-
   const { DEFAULT_PROFILE } = await import('@/lib/memory')
   const profileData = profileResult.data
   const profile = profileData ? {
@@ -47,15 +40,22 @@ export async function POST(req: Request) {
     weaknesses: profileData.weaknesses ?? DEFAULT_PROFILE.weaknesses,
   } : DEFAULT_PROFILE
 
-  const memories = memoriesResult.data ?? []
-
+  // Semantik hafıza bağlamı: kullanıcının SON mesajı sorgu olur, hybridRetrieve
+  // ilgili entity'leri getirir (bütçe kırpması buildChatContext'te). Retrieval
+  // hatası boş bağlama düşer, sohbeti düşürmez.
+  //
   // Yeni kullanıcı (entities çekirdeği boş) → tanışma sohbeti bölümü system
   // prompt'a eklenir; MockProvider bu marker'la onboarding senaryosuna girer
   // (roadmap ilke 14). Sorgu hatası onboarding'i tetiklemez, normal akışa düşer.
   const { needsOnboarding } = await import('@/lib/db-server')
-  const onboarding = userId ? await needsOnboarding(userId).catch(() => false) : false
+  const { buildChatContext } = await import('@/lib/ai/chat-context')
+  const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
+  const [retrieved, onboarding] = await Promise.all([
+    userId ? buildChatContext(lastUserMessage, userId) : Promise.resolve([]),
+    userId ? needsOnboarding(userId).catch(() => false) : Promise.resolve(false),
+  ])
 
-  const systemPrompt = buildSystemPrompt(profile, memories, lastConversation, activeModule, onboarding)
+  const systemPrompt = buildSystemPrompt(profile, retrieved, lastConversation, activeModule, onboarding)
   const provider = getAIProvider()
 
   const readable = new ReadableStream({

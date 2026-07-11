@@ -277,6 +277,72 @@ export async function saveJournalEntry(
  * retrieval'da görünmeye devam ederdi (güven ihlali); tersi yalnızca
  * backfill ile kapanan zararsız bir boşluk bırakır.
  */
+// ─── Memories köprü yazımı (save_memory tool'u) ──────────────────────────────
+// memories silo tablosu ESAS kaynak olarak kalır (mevcut verinin taşınması /
+// tablonun geleceği AYRI bir görev); her YENİ hafıza journal desenindeki gibi
+// entities'te embedding'li bir köprü satırı (source_table='memories') kazanır
+// ki hybridRetrieve'e — dolayısıyla chat bağlamına — dahil olsun.
+// Entity tipi 'note': şema CHECK listesinde 'memory' tipi yok ve yeni tip =
+// yeni migration + uygulanana dek kırık save_memory demekti; kökeni zaten
+// source_table taşıyor. Taksonomi kararı FAZ AI'da (CLAUDE.md §4).
+
+export interface MemoryInput {
+  content: string
+  importance?: number
+  tags?: string[]
+  type?: string
+}
+
+const MEMORY_TITLE_MAX = 80
+
+function deriveMemoryTitle(content: string): string {
+  const flat = content.replace(/\s+/g, ' ').trim()
+  return flat.length > MEMORY_TITLE_MAX ? `${flat.slice(0, MEMORY_TITLE_MAX)}…` : flat
+}
+
+/**
+ * Hafıza yazma yolu: silo insert + köprü senkronu (saveJournalEntry ile aynı
+ * sözleşme). Silo yazımı esastır; embedding/entity hatası hafızayı
+ * kaybettirmez (entitySynced: false döner).
+ */
+export async function saveMemory(
+  userId: string,
+  input: MemoryInput,
+): Promise<{ id: string; entitySynced: boolean }> {
+  const { supabase } = await entityDeps()
+  const date = new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
+  const { data, error } = await supabase
+    .from('memories')
+    .insert({
+      user_id: userId,
+      content: input.content,
+      summary: input.content,
+      importance: input.importance ?? 5,
+      tags: input.tags ?? [],
+      type: input.type ?? 'general',
+      date,
+    })
+    .select('id')
+    .single()
+  if (error) throw error
+  const memoryId = data.id as string
+
+  try {
+    await createEntity({
+      userId,
+      type: 'note',
+      title: deriveMemoryTitle(input.content),
+      content: input.content,
+      sourceTable: 'memories',
+      sourceId: memoryId,
+    })
+    return { id: memoryId, entitySynced: true }
+  } catch (syncError) {
+    console.error('[memories] köprü senkronu başarısız (silo kayıt korundu):', syncError)
+    return { id: memoryId, entitySynced: false }
+  }
+}
+
 // ─── Goals (Faz 2, Görev 2) ──────────────────────────────────────────────────
 // Goals migration 0001'in NATIVE modunda yaşar: her goal bir entities satırı
 // (type='goal', source_table NULL) + goals uzantı satırıdır (1:1, PK=FK, bkz.

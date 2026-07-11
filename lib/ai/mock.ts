@@ -17,6 +17,9 @@ import { ONBOARDING_MARKER } from '../sanchez-prompt'
 //   'araştır' veya 'web'  → sahte web_search: tool_start + sahte sonuçlu cevap
 //   'hafıza' veya 'hatırla' → gerçek read_memories tool turu ister; sonuç dönünce
 //                             ikinci turda cevap verir (tool döngüsü testi)
+//   'kaydet'              → gerçek save_memory tool turu ister (content = son
+//                            kullanıcı mesajı); sonuç dönünce kapanış cevabı
+//                            (hafıza döngüsü testi — lib/memory-loop.test.ts)
 //   diğer her şey         → normal sohbet cevabı
 //
 // İSTİSNA — onboarding (Faz 2, Görev 3): system prompt ONBOARDING_MARKER
@@ -57,7 +60,7 @@ function userMessages(req: AIRequest): string[] {
   return out
 }
 
-type Scenario = 'onboarding' | 'error' | 'web_search' | 'memory' | 'chat'
+type Scenario = 'onboarding' | 'error' | 'web_search' | 'memory' | 'save_memory' | 'chat'
 
 function pickScenario(req: AIRequest): Scenario {
   // Onboarding system marker'ı kelime senaryolarından ÖNCE gelir: tanışma
@@ -67,6 +70,7 @@ function pickScenario(req: AIRequest): Scenario {
   if (text.includes('hata')) return 'error'
   if (text.includes('araştır') || text.includes('web')) return 'web_search'
   if (text.includes('hafıza') || text.includes('hatırla')) return 'memory'
+  if (text.includes('kaydet')) return 'save_memory'
   return 'chat'
 }
 
@@ -97,6 +101,12 @@ const MEMORY_RESPONSE =
   '[MOCK] Hafıza kayıtlarına baktım — read_memories aracı gerçekten çalıştı ve ' +
   'sonucu bana ulaştı (tool döngüsü sağlam). Kayıtların yorumu gerçek üretken ' +
   'AI bağlanınca yapılacak; bu cevap deterministik bir fixture.'
+
+const SAVE_MEMORY_INTRO = 'Bunu hafızama işliyorum... '
+
+const SAVE_MEMORY_DONE =
+  '[MOCK] Kaydettim — save_memory aracı gerçekten çalıştı; bilgi Brain\'e ' +
+  'embedding\'li bir entity olarak işlendi ve sonraki sohbetlerde retrieval ile geri gelir.'
 
 // ── Onboarding fixture'ları ──
 // Hedef başlığı sabittir (mock'ta gerçek çıkarım yok); açıklama kullanıcının
@@ -187,8 +197,33 @@ export class MockProvider implements AIProvider {
       return
     }
 
+    if (scenario === 'save_memory' && !hasToolResults(req)) {
+      // 1. tur: gerçek save_memory çağrısı iste — content, kullanıcının son
+      // mesajının kendisidir (deterministik ama gerçek veri; onboarding'deki
+      // save_goal deseniyle aynı: metin mock, yazma gerçek).
+      const users = userMessages(req)
+      yield* this.streamText(SAVE_MEMORY_INTRO)
+      yield { type: 'tool_start', name: 'save_memory' }
+      yield {
+        type: 'done',
+        turn: {
+          stopReason: 'tool_use',
+          text: SAVE_MEMORY_INTRO,
+          toolUses: [{
+            id: 'mock-save-memory-1',
+            name: 'save_memory',
+            input: { content: users[users.length - 1] ?? '', importance: 5, tags: ['mock'] },
+          }],
+        },
+      }
+      return
+    }
+
     // 2. tur (tool sonucu geldi) veya normal sohbet
-    const text = scenario === 'memory' ? MEMORY_RESPONSE : CHAT_RESPONSE
+    const text =
+      scenario === 'memory' ? MEMORY_RESPONSE :
+      scenario === 'save_memory' ? SAVE_MEMORY_DONE :
+      CHAT_RESPONSE
     yield* this.streamText(text)
     yield { type: 'done', turn: { stopReason: 'end_turn', text, toolUses: [] } }
   }

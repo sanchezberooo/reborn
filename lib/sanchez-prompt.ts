@@ -1,5 +1,16 @@
-import type { BeroProfile, Memory } from './memory'
+import type { BeroProfile } from './memory'
 import type { ModuleItem } from './modules'
+
+/** Chat bağlamına giren, Brain'den (entities) semantik getirilmiş kayıt.
+ *  Üretimi lib/ai/chat-context.ts'te (server-only, hybridRetrieve); şekil
+ *  burada tanımlı ki bu dosya client-safe kalsın ve testler prompt'u
+ *  route'suz kurabilsin. */
+export interface RetrievedContextItem {
+  type: string
+  title: string
+  snippet: string | null
+  createdAt: string
+}
 
 const SANCHEZ_BASE = `Sen Sanchez'sin.
 
@@ -100,7 +111,7 @@ bitmiş sayılmaz.`
 
 export function buildSystemPrompt(
   profile: BeroProfile,
-  memories: Memory[],
+  retrieved: RetrievedContextItem[],
   lastConversation?: { role: string; content: string }[],
   activeModule?: ModuleItem,
   onboarding?: boolean
@@ -128,12 +139,16 @@ Güçlü yanları: ${profile.strengths?.join(', ') ?? '-'}
 Zayıf yanları: ${profile.weaknesses?.join(', ') ?? '-'}
 Aktif proje: ${profile.project}`
 
+  // Bütçe (maks ~2000 token) buildChatContext'te kesilir; burada gelen liste
+  // olduğu gibi basılır — ikinci bir kırpma katmanı sürpriz veri kaybı olurdu.
   const memoriesSection =
-    memories.length > 0
+    retrieved.length > 0
       ? `
 
-─── Geçmiş hafıza ───
-${memories.slice(0, 5).map((m) => `[${m.date}] ${m.summary}`).join('\n')}`
+─── İlgili hafıza (son mesaja göre Brain'den getirildi) ───
+${retrieved
+  .map((r) => `- [${r.type} · ${r.createdAt.slice(0, 10)}] ${r.title}${r.snippet ? ` — ${r.snippet}` : ''}`)
+  .join('\n')}`
       : ''
 
   const lastConvSection =

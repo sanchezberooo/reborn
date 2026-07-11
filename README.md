@@ -11,7 +11,7 @@ Built by Sanchez Bero, 18, Istanbul.
 - Agent Office (AI automations you can monitor and control)
 
 ## Stack
-Next.js 14 · TypeScript · Tailwind CSS · OpenAI API · Supabase
+Next.js 16 · React 19 · TypeScript · Tailwind CSS v4 · Anthropic Claude (AIProvider soyutlaması: anthropic | mock + lokal bge-m3 embedding) · Supabase (Postgres + pgvector)
 
 ## Vision
 Every person has untapped potential Reborn exists to unlock it

@@ -26,7 +26,7 @@ export interface ModuleDef {
  *  görünürlük (Dashboard kartı, route kapısı, ayar anahtarı) kayıttan türer.
  *
  *  Navigasyon yeniden yapılandırması (üst nav 4 sabit sekmeye indirildi —
- *  Sanchez/Dashboard/Agent Panel/Topluluk): modül route'ları artık üst
+ *  Sanchez/Dashboard/MAXAİ/Brain, bkz. components/AppNav.tsx): modül route'ları artık üst
  *  seviyede DEĞİL, /dashboard altında yaşar (ör. /dashboard/gunluk). Header
  *  bu registry'den artık sekme türetmiyor — yalnız ModuleGate (route kapısı)
  *  ve Dashboard'un kart listesi kullanıyor. Eski üst-seviye route'lar

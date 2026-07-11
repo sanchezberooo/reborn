@@ -85,12 +85,11 @@ export async function serverExecuteTool(
       const { content, importance = 5, tags = [], type = 'general' } = input as {
         content: string; importance?: number; tags?: string[]; type?: string
       }
-      const date = new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })
-      const { error } = await supabase.from('memories').insert({
-        user_id: userId, content, summary: content, importance, tags, type, date,
-      })
-      if (error) throw error
-      return { ok: true }
+      // saveMemory: silo insert + Brain köprü entity'si (embedding lokal bge-m3)
+      // — kayıt hybridRetrieve'e ve dolayısıyla chat bağlamına dahil olur.
+      const { saveMemory } = await import('@/lib/db-server')
+      const result = await saveMemory(userId, { content, importance, tags, type })
+      return { ok: true, memory_id: result.id, entity_synced: result.entitySynced }
     }
 
     case 'save_goal': {

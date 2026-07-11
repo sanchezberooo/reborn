@@ -528,7 +528,7 @@ export default function DashboardPage() {
       content: <RoadmapContent mod={roadmapMod} />,
     },
     {
-      id: 'agent', href: '/agent-panel', icon: Bot, title: 'Agent Panel',
+      id: 'agent', href: '/maxai/panel', icon: Bot, title: 'Agent Panel',
       defaultSpan: 'sm', hasData: false,
       content: <AgentContent />,
     },
