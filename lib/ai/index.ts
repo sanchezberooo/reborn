@@ -4,7 +4,7 @@ import { MockProvider } from './mock'
 
 export type { AIMessage, AIProvider, AIRequest, AIStreamEvent, AIToolDef, AIToolResult, AIToolUse, AITurn } from './provider'
 export { CLAUDE_MODEL } from './anthropic'
-export { TOOLS } from './tools'
+export { TOOLS, MAX_TOOL_ITERATIONS } from './tools'
 
 // Provider seçimi (env):
 //   AI_PROVIDER=mock       → MockProvider (API key'siz geliştirme/test)

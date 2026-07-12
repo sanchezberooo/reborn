@@ -6,6 +6,7 @@ import type {
   AITurn,
 } from './provider'
 import { ONBOARDING_MARKER } from '../sanchez-prompt'
+import { KNOWLEDGE_AGENT_MARKER } from '../agents/knowledge-agent-prompt'
 
 // MockProvider v1 — deterministik senaryo fixture'ları. API key'siz ve bakiyesiz
 // geliştirme/test için: streaming, tool durum göstergeleri, hata toleransı ve
@@ -137,6 +138,52 @@ const ONBOARDING_DONE =
 const SUMMARY_FIXTURE =
   '[MOCK] Sohbet özeti: Bero Sanchez ile konuştu; bu özet MockProvider tarafından üretilen sabit bir fixture\'dır.'
 
+// ── Knowledge Agent fixture'ı ──
+// Deterministik "bu bir Fact'tir" senaryosu (lib/brain/knowledge-agent.test.ts):
+// karar mock'tur ama brain_integrate yazımı GERÇEKTİR (onboarding'deki
+// save_goal deseniyle aynı). Test, oluşan fact node'un içeriğini bu sabitle
+// doğrular — export bu yüzden.
+
+export const KNOWLEDGE_FACT_CONTENT =
+  '[MOCK] Damıtılmış fact: bu içerik MockProvider Knowledge Agent senaryosunun sabit fixture\'ıdır.'
+
+const KNOWLEDGE_SIGNAL_ID_RE =
+  /\[signalId: ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\]/i
+
+// ── Knowledge Agent RAPOR MODU fixture'ı ──
+// Deterministik rapor senaryosu (lib/knowledge/report-mode.test.ts): input
+// { mode:'report', sourceUrl } ise 1. turda GERÇEK fetch_source_overview
+// çağrısı istenir (executor gerçekten çalışır: GitHub fetch + brainRelation
+// hesabı); 2. turda tool sonucundaki alanlar prompt şablonunun TÜM zorunlu
+// bölümlerini içeren sabit yapılı rapora dökülür. brain_integrate/brain_link
+// bu senaryoda ASLA istenmez — rapor ephemeral sözleşmesinin mock karşılığı.
+
+/** Rapor şablonunun zorunlu bölüm başlıkları (knowledge-agent-prompt.ts
+ *  şablonuyla birebir) — testler raporda hepsinin varlığını doğrular. */
+export const KNOWLEDGE_REPORT_SECTIONS = [
+  '# Kaynak Analiz Raporu:',
+  '## Bu Repo Ne Yapıyor / Neden Önemli',
+  '## Brain ile İlişki',
+  '## Reusable Assets',
+  '## Kim Faydalanır',
+  '## Brain Value Score:',
+  '## Import Etmeye Değer mi?',
+] as const
+
+/** runAgent user mesajı JSON.stringify(input)'tır — rapor modu girdisi buradan
+ *  ayıklanır; JSON değilse veya mode:'report' yoksa null (sinyal işleme yolu). */
+function parseKnowledgeReportInput(req: AIRequest): { sourceUrl: string } | null {
+  const users = userMessages(req)
+  if (users.length === 0) return null
+  try {
+    const parsed = JSON.parse(users[0]) as { mode?: unknown; sourceUrl?: unknown }
+    if (parsed.mode === 'report' && typeof parsed.sourceUrl === 'string') {
+      return { sourceUrl: parsed.sourceUrl }
+    }
+  } catch { /* JSON değil → rapor modu değil */ }
+  return null
+}
+
 // ─── Provider ───────────────────────────────────────────────────────────────
 
 export class MockProvider implements AIProvider {
@@ -148,6 +195,12 @@ export class MockProvider implements AIProvider {
     // Özet isteği hata senaryosundan ÖNCE: sohbet metninde 'hata' geçmesi özeti düşürmesin
     if (req.system.toLowerCase().includes('özetle')) {
       return { stopReason: 'end_turn', text: SUMMARY_FIXTURE, toolUses: [] }
+    }
+    // Knowledge Agent senaryosu — system marker'ı kelime senaryolarından ÖNCE
+    // gelir (onboarding deseni): sinyal içeriğinde geçen "hata" vb. kelimeler
+    // akışı raydan çıkarmasın.
+    if (req.system.includes(KNOWLEDGE_AGENT_MARKER)) {
+      return this.completeKnowledgeAgent(req)
     }
     if (pickScenario(req) === 'error') {
       throw new Error('MockProvider: hata senaryosu tetiklendi (mesajda "hata" geçiyor).')
@@ -226,6 +279,140 @@ export class MockProvider implements AIProvider {
       CHAT_RESPONSE
     yield* this.streamText(text)
     yield { type: 'done', turn: { stopReason: 'end_turn', text, toolUses: [] } }
+  }
+
+  /** Knowledge Agent akışı — deterministik "bu bir Fact'tir" senaryosu.
+   *  1. tur: system prompt'taki bağlam bölümünden İLK bekleyen sinyalin id'si
+   *  ayıklanır ve onun için GERÇEK brain_integrate çağrısı istenir (executor
+   *  gerçekten çalışır: yeni cold node + derived_from kenarı yazılır).
+   *  2. tur (tool sonucu geldi) veya bekleyen sinyal yok: ajanın çıktı
+   *  sözleşmesine (registry outputContract) uyan kapanış JSON'ı döner. */
+  private completeKnowledgeAgent(req: AIRequest): AITurn {
+    // Rapor modu sinyal işlemeden ÖNCE ayrıştırılır (input'ta mode:'report'):
+    // runner rapor modunda sinyal bağlamını zaten boş geçer ama seçim yine de
+    // input'a bağlanır — iki mod asla karışmaz.
+    const reportInput = parseKnowledgeReportInput(req)
+    if (reportInput) return this.completeKnowledgeReport(req, reportInput.sourceUrl)
+
+    const signalId = KNOWLEDGE_SIGNAL_ID_RE.exec(req.system)?.[1]
+
+    if (signalId && !hasToolResults(req)) {
+      return {
+        stopReason: 'tool_use',
+        text: '',
+        toolUses: [{
+          id: 'mock-knowledge-integrate-1',
+          name: 'brain_integrate',
+          input: { signalId, targetType: 'fact', content: KNOWLEDGE_FACT_CONTENT },
+        }],
+      }
+    }
+
+    // nodeId, executor'ın brain_integrate sonucundan okunur (varsa).
+    let nodeId: string | null = null
+    const toolMsg = [...req.messages].reverse().find((m) => m.role === 'tool_results')
+    if (toolMsg?.role === 'tool_results') {
+      try {
+        nodeId = (JSON.parse(toolMsg.results[0]?.content ?? '{}') as { nodeId?: string }).nodeId ?? null
+      } catch { /* bozuk sonuç → nodeId null kalır */ }
+    }
+    const output = JSON.stringify({
+      processed: signalId ? [{ signalId, targetType: 'fact', nodeId }] : [],
+      skipped: [],
+      summary: signalId
+        ? '[MOCK] Knowledge Agent senaryosu — bir sinyal fact olarak entegre edildi.'
+        : '[MOCK] Knowledge Agent senaryosu — bekleyen sinyal yok.',
+    })
+    return { stopReason: 'end_turn', text: output, toolUses: [] }
+  }
+
+  /** Rapor modu akışı — deterministik senaryo (dosya başındaki fixture notu).
+   *  1. tur: GERÇEK fetch_source_overview çağrısı (iki aşamalı maliyet
+   *  kontrolünün mock karşılığı: ön-bakış yeterli sayılır, fetch_source_content
+   *  BİLİNÇLİ istenmez). 2. tur: tool sonucundaki overview + brainRelation,
+   *  zorunlu tüm bölümleri içeren sabit yapılı rapora dökülür ve
+   *  { mode, sourceUrl, report } zarfıyla döner. Brain'e yazan tool YOK. */
+  private completeKnowledgeReport(req: AIRequest, sourceUrl: string): AITurn {
+    if (!hasToolResults(req)) {
+      return {
+        stopReason: 'tool_use',
+        text: '',
+        toolUses: [{
+          id: 'mock-knowledge-report-overview',
+          name: 'fetch_source_overview',
+          input: { sourceUrl },
+        }],
+      }
+    }
+
+    let overview: {
+      description?: string | null
+      stars?: number
+      language?: string | null
+      topics?: string[]
+      brainRelation?: {
+        relatedNodes?: { id: string; type: string; title: string }[]
+        similarityLevel?: string
+        confidence?: string
+      }
+      ok?: boolean
+      error?: string
+    } = {}
+    const toolMsg = [...req.messages].reverse().find((m) => m.role === 'tool_results')
+    if (toolMsg?.role === 'tool_results') {
+      try {
+        overview = JSON.parse(toolMsg.results[0]?.content ?? '{}') as typeof overview
+      } catch { /* bozuk sonuç → boş overview ile rapor yine kurulur */ }
+    }
+
+    const rel = overview.brainRelation ?? {}
+    const relatedNodes = rel.relatedNodes ?? []
+    const similarity = rel.similarityLevel ?? 'Low'
+    const confidence = rel.confidence ?? 'Low'
+    const relatedLines = relatedNodes.length > 0
+      ? relatedNodes.map((n) => `  - ${n.id} — ${n.type} — ${n.title}`).join('\n')
+      : '  - yok'
+
+    const report = [
+      `# Kaynak Analiz Raporu: ${sourceUrl}`,
+      '',
+      '## Bu Repo Ne Yapıyor / Neden Önemli',
+      `[MOCK] ${overview.description ?? 'Açıklama yok'} — ${overview.stars ?? 0} yıldız, dil: ${overview.language ?? 'bilinmiyor'}. Bu özet MockProvider fixture'ıdır; gerçek analiz AnthropicProvider ile üretilir.`,
+      '',
+      '## Brain ile İlişki',
+      `- Existing Related Knowledge: ${relatedNodes.length > 0 ? '[MOCK] ilgili node snippet özeti.' : "Brain'de bu alanda kayıtlı bilgi yok."}`,
+      '- Related Nodes:',
+      relatedLines,
+      `- Similarity Level: ${similarity}`,
+      `- Confidence: ${confidence}`,
+      '',
+      '## Reusable Assets',
+      '- Detected Skills: tespit edilmedi',
+      '- Detected Patterns: tespit edilmedi',
+      '- Detected Workflows: tespit edilmedi',
+      '- Detected Tool References: GitHub REST (API)',
+      `- Detected Technologies: ${overview.language ?? 'tespit edilmedi'}`,
+      `- Detected Libraries: ${(overview.topics ?? []).join(', ') || 'tespit edilmedi'}`,
+      '- Detected Best Practices: tespit edilmedi',
+      '- Detected Project Structure: tespit edilmedi',
+      '',
+      '## Kim Faydalanır',
+      '- Hangi ajanlar: kesif-arastirmaci (kaba eşleştirme — mock fixture)',
+      '- Hangi sektörlerde kullanılabilir: [MOCK] genel yazılım',
+      '- Gereksiz / import edilmemesi gerekenler: [MOCK] belirtilecek bir şey yok',
+      '',
+      `## Brain Value Score: ${similarity === 'High' ? 'Low' : 'Medium'}`,
+      '[MOCK] Üç bileşenin basit ortalaması: tekrarsızlık + kaynak güvenilirliği + yeniden kullanılabilirlik.',
+      '',
+      '## Import Etmeye Değer mi?',
+      '[MOCK] Bu bir öneridir, karar değil — son karar senin.',
+    ].join('\n')
+
+    return {
+      stopReason: 'end_turn',
+      text: JSON.stringify({ mode: 'report', sourceUrl, report }),
+      toolUses: [],
+    }
   }
 
   /** Onboarding tanışma akışı — tur sayısı kullanıcı mesajı sayısıyla belirlenir

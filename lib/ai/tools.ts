@@ -1,9 +1,25 @@
 import type { AIToolDef } from './provider'
+import { BRAIN_TOOLS } from '../brain/tools'
+import { SOURCE_TOOLS } from '../knowledge/source-tools'
 
 // Sanchez ve ajanların custom tool tanımları — provider-bağımsız şema
 // (lib/anthropic.ts'ten taşındı). Davranışları lib/agents/executor.ts
 // serverExecuteTool() switch'inde; yeni tool eklerken İKİSİNİ birlikte güncelle.
 // Anthropic'e çeviri AnthropicProvider içinde yapılır (inputSchema → input_schema).
+//
+// brain_* tool'ları (lib/brain/tools.ts) dosya sonunda bu merkezi listeye
+// birleştirilir — ayrı ikinci tool sistemi yok. Kim hangi brain tool'unu
+// kullanabilir ayrımı registry'deki toolNames listeleriyle yapılır (yapısal/
+// isimsel — gerçek yetkilendirme değil); tanım açıklamaları da bunu belirtir.
+
+/** Tool döngüsü üst sınırı (tool-yürütme turu sayısı) — hem Sanchez chat
+ *  route'u (app/api/chat/route.ts) hem ajan runner'ı (lib/agents/runner.ts)
+ *  BU sabiti kullanır; ikinci bir sabit tanımlama, buradan import et.
+ *  Değer seçimi: en ağır meşru senaryo, Knowledge Agent'ın 10 bekleyen
+ *  sinyali tool çağrılarını batch'lemeden tek tek entegre etmesi (~11-14
+ *  tur); Sanchez'in en ağır akışı (read_essays → run_agent) ≤3 tur. 16,
+ *  bunların üstünde ama kaçak/sonsuz döngünün maliyetini yine de keser. */
+export const MAX_TOOL_ITERATIONS = 16
 
 export const TOOLS: AIToolDef[] = [
   {
@@ -182,7 +198,7 @@ export const TOOLS: AIToolDef[] = [
       properties: {
         agentName: {
           type: 'string',
-          description: 'Çalıştırılacak ajan: ingilizce-planlayici | ingilizce-genel-plan | kesif-arastirmaci | burs-toplu-arastirma | burs-derinlestir | essay-brainstorm | essay-critic',
+          description: 'Çalıştırılacak ajan: ingilizce-planlayici | ingilizce-genel-plan | kesif-arastirmaci | burs-toplu-arastirma | burs-derinlestir | essay-brainstorm | essay-critic | knowledge-agent',
         },
         agentInput: {
           type: 'object',
@@ -206,4 +222,13 @@ export const TOOLS: AIToolDef[] = [
       required: ['university', 'country', 'deadline'],
     },
   },
+
+  // Agent Brain tool'ları — tanımlar lib/brain/tools.ts'te yaşar,
+  // davranışlar executor'da (brain_* case'leri).
+  ...BRAIN_TOOLS,
+
+  // Dış kaynak fetch tool'ları — tanımlar lib/knowledge/source-tools.ts'te,
+  // davranışlar (github.com whitelist'i dahil) lib/knowledge/source-fetcher.ts'te,
+  // executor'da fetch_source_* case'leri. SADECE Knowledge Agent kullanır.
+  ...SOURCE_TOOLS,
 ]

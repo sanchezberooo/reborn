@@ -1,4 +1,4 @@
-import { getAIProvider, TOOLS } from '@/lib/ai'
+import { getAIProvider, TOOLS, MAX_TOOL_ITERATIONS } from '@/lib/ai'
 import type { AIMessage, AIToolResult } from '@/lib/ai'
 import { getAgent } from '@/lib/agents/registry'
 import { serverExecuteTool } from '@/lib/agents/executor'
@@ -66,16 +66,37 @@ export async function runAgent(
       ? TOOLS.filter((t) => agent.toolNames.includes(t.name))
       : []
 
+    // Knowledge Agent istisnası: bekleyen sinyal bağlamı system prompt'a
+    // çalıştırma anında bağlanır (lib/brain/context-builder.ts) — tek ajana
+    // özel minimal dokunuş, genel bir dinamik-persona mekanizması DEĞİL.
+    // Rapor modunda (input.mode === 'report') sinyal bağlamı BİLİNÇLİ atlanır:
+    // rapor sinyallerle ilgilenmez, listenin varlığı modu bulandırır — sinyal
+    // işleme yolu (mode'suz input) birebir aynı kalır.
+    let system = agent.persona
+    if (agentName === 'knowledge-agent') {
+      const { buildKnowledgeAgentContext } = await import('@/lib/brain/context-builder')
+      const { buildKnowledgeAgentPrompt } = await import('@/lib/agents/knowledge-agent-prompt')
+      const isReportMode = (input as { mode?: unknown }).mode === 'report'
+      system = buildKnowledgeAgentPrompt(
+        isReportMode ? '' : await buildKnowledgeAgentContext(10, { userId })
+      )
+    }
+
     const messages: AIMessage[] = [
       { role: 'user', content: JSON.stringify(input) },
     ]
 
     let finalText = ''
 
+    // Kaçak döngü guard'ı (chat route'uyla AYNI sabit): sınır aşılırsa hata
+    // fırlatılmaz — eldeki metinle çıkılır, parseAgentOutput normal yolunda
+    // (gerekirse parseError fallback'iyle) devam eder.
+    let toolRounds = 0
+
     while (true) {
       const turn = await provider.complete({
         model: agent.model,
-        system: agent.persona,
+        system,
         messages,
         tools: customTools,
         maxTokens: agent.maxTokens ?? 2048,
@@ -85,6 +106,12 @@ export async function runAgent(
       finalText += turn.text
 
       if (turn.stopReason !== 'tool_use') break
+
+      if (toolRounds >= MAX_TOOL_ITERATIONS) {
+        console.warn(`[Reborn] runAgent(${agentName}): MAX_TOOL_ITERATIONS (${MAX_TOOL_ITERATIONS}) aşıldı — tool döngüsü durduruldu.`)
+        break
+      }
+      toolRounds++
 
       messages.push({ role: 'assistant', content: turn.text, raw: turn.raw })
 

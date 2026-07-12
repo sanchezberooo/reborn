@@ -1,4 +1,5 @@
 import type { AgentDefinition } from './types'
+import { buildKnowledgeAgentPrompt } from './knowledge-agent-prompt'
 
 export const AGENTS: Record<string, AgentDefinition> = {
 
@@ -284,6 +285,36 @@ topPriorities: kullanıcının bir sonraki revizyonda düzeltmesi gereken en ön
 Dil: eleştiriler Türkçe, taslaktan alıntılar orijinal dilinde (İngilizce).
 
 ÇOK ÖNEMLİ ÇIKTI KURALI: SADECE geçerli bir JSON nesnesi döndür. Markdown YOK. İlk karakter { son karakter } olmalı. JSON DIŞINDA tek karakter bile yazma.`,
+  },
+
+  // ── Knowledge Agent: sinyal → soğuk katman damıtıcısı (Agent Brain) ──────
+  // Tetikleme tamamen manueldir (run_agent üzerinden) — otomatik/periyodik
+  // tetik, event bus, cron YOK. webSearch bilinçli KAPALI: dış dünyaya tek
+  // penceresi domain-kısıtlı fetch_source_* tool'larıdır (yalnız github.com).
+  // İKİ MODU VAR (ayrım input'la, prompt içinde net): (1) sinyal işleme —
+  // varsayılan, outputContract aşağıdaki şema; (2) rapor modu — input
+  // { mode:'report', sourceUrl } ise; çıktı { mode:'report', sourceUrl,
+  // report } zarfıdır, rapor EPHEMERAL'dir (Brain'e hiçbir yazım yok).
+  'knowledge-agent': {
+    name: 'knowledge-agent',
+    displayName: 'Knowledge Agent',
+    moduleTarget: null,
+    // brain_read_signals + brain_integrate SADECE bu ajanın listesinde
+    // (privileged entegrasyon yolu); brain_link + brain_get_node her ajana
+    // açık olabilir. Ayrım yapısal/isimseldir — gerçek yetkilendirme değil.
+    // fetch_source_* (lib/knowledge/source-tools.ts) de SADECE bu ajanda:
+    // rapor modunun dış-kaynak gözü (yalnız github.com, salt okuma).
+    toolNames: ['brain_read_signals', 'brain_integrate', 'brain_link', 'brain_get_node', 'fetch_source_overview', 'fetch_source_content'],
+    model: 'claude-haiku-4-5',
+    // 8192: rapor modu tam şablonlu uzun markdown üretir; sinyal işleme için
+    // yalnız üst sınır — davranışı değişmez (eski değer 4096).
+    maxTokens: 8192,
+    outputContract: JSON.stringify({
+      processed: [{ signalId: 'string', targetType: 'string', nodeId: 'string' }],
+      skipped: [{ signalId: 'string', reason: 'string' }],
+      summary: 'string',
+    }),
+    persona: buildKnowledgeAgentPrompt(),
   },
 
   // ── Smoke-test agent ──────────────────────────────────────────────────────

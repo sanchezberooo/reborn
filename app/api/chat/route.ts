@@ -1,4 +1,4 @@
-import { getAIProvider, TOOLS } from '@/lib/ai'
+import { getAIProvider, TOOLS, MAX_TOOL_ITERATIONS } from '@/lib/ai'
 import type { AIMessage, AIToolResult, AITurn } from '@/lib/ai'
 import { buildSystemPrompt } from '@/lib/sanchez-prompt'
 import { serverExecuteTool } from '@/lib/agents/executor'
@@ -69,6 +69,11 @@ export async function POST(req: Request) {
           content: m.content,
         }))
 
+        // Kaçak döngü guard'ı: model üst üste MAX_TOOL_ITERATIONS'tan fazla
+        // tool turu isterse akış nazikçe kapatılır — hata fırlatılmaz,
+        // stream 'done' ile düzgün biter. Normal kullanım limite yaklaşmaz.
+        let toolRounds = 0
+
         while (true) {
           let turn: AITurn | null = null
 
@@ -90,6 +95,16 @@ export async function POST(req: Request) {
           }
 
           if (!turn || turn.stopReason !== 'tool_use') break
+
+          if (toolRounds >= MAX_TOOL_ITERATIONS) {
+            console.warn(`[Reborn] MAX_TOOL_ITERATIONS (${MAX_TOOL_ITERATIONS}) aşıldı — tool döngüsü durduruldu.`)
+            send({
+              type: 'text',
+              text: '\n\nBu iş beklediğimden fazla adım gerektirdi; bu turu burada durdurdum. Devam etmemi istersen tekrar söyle.',
+            })
+            break
+          }
+          toolRounds++
 
           currentHistory.push({ role: 'assistant', content: turn.text, raw: turn.raw })
 
