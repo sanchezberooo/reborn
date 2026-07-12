@@ -7,6 +7,8 @@ export const AGENTS: Record<string, AgentDefinition> = {
   'ingilizce-genel-plan': {
     name: 'ingilizce-genel-plan',
     displayName: 'İngilizce Genel Plan',
+    department: 'legacy',
+    deprecated: true,
     moduleTarget: null,
     toolNames: [],
     maxTokens: 1500,
@@ -41,6 +43,8 @@ Kurallar:
   'ingilizce-planlayici': {
     name: 'ingilizce-planlayici',
     displayName: 'İngilizce Planlayıcı',
+    department: 'legacy',
+    deprecated: true,
     moduleTarget: null,
     toolNames: [],
     maxTokens: 8192,
@@ -89,6 +93,8 @@ Planlama kuralları:
   'kesif-arastirmaci': {
     name: 'kesif-arastirmaci',
     displayName: 'Keşif Araştırmacı',
+    department: 'legacy',
+    deprecated: true,
     moduleTarget: null,
     toolNames: [],
     webSearch: true,
@@ -111,6 +117,8 @@ Linkleri sources dizisindeki url alanına koy. Açıklamaları string olarak yaz
   'burs-toplu-arastirma': {
     name: 'burs-toplu-arastirma',
     displayName: 'Burs Toplu Araştırma',
+    department: 'legacy',
+    deprecated: true,
     moduleTarget: null,
     toolNames: [],
     webSearch: true,
@@ -161,6 +169,8 @@ Her okul için şu alanları doldur:
   'burs-derinlestir': {
     name: 'burs-derinlestir',
     displayName: 'Burs Derinleştir',
+    department: 'legacy',
+    deprecated: true,
     moduleTarget: null,
     toolNames: [],
     webSearch: true,
@@ -206,6 +216,8 @@ Doldurman gereken alanlar:
   'essay-brainstorm': {
     name: 'essay-brainstorm',
     displayName: 'Essay Beyin Fırtınası',
+    department: 'legacy',
+    deprecated: true,
     moduleTarget: null,
     toolNames: ['read_memories', 'read_profile'],
     model: 'claude-haiku-4-5',
@@ -249,6 +261,8 @@ Doldurulacak alanlar:
   'essay-critic': {
     name: 'essay-critic',
     displayName: 'Essay Eleştirmeni',
+    department: 'legacy',
+    deprecated: true,
     moduleTarget: null,
     toolNames: [],
     model: 'claude-haiku-4-5',
@@ -298,6 +312,9 @@ Dil: eleştiriler Türkçe, taslaktan alıntılar orijinal dilinde (İngilizce).
   'knowledge-agent': {
     name: 'knowledge-agent',
     displayName: 'Knowledge Agent',
+    // department yalnız roster metadata'sı — ajanın davranışı, tool listesi
+    // ve promptu DEĞİŞMEDİ (MAXAİ departman yapısında kendi departmanıdır).
+    department: 'knowledge',
     moduleTarget: null,
     // brain_read_signals + brain_integrate SADECE bu ajanın listesinde
     // (privileged entegrasyon yolu); brain_link + brain_get_node her ajana
@@ -315,6 +332,166 @@ Dil: eleştiriler Türkçe, taslaktan alıntılar orijinal dilinde (İngilizce).
       summary: 'string',
     }),
     persona: buildKnowledgeAgentPrompt(),
+  },
+
+  // ═══ MAXAİ DEPARTMAN ROSTERİ (v1) ═══════════════════════════════════════
+  // Her departman TEK ajandır; alt-ajan orkestrasyonu YOK. Hepsi taslak-üretici
+  // (draft-only): hiçbiri dış dünyaya eylem yapmaz — yayınlama, mesaj gönderme,
+  // bütçe harcama YOK; çıktı her zaman insan onayı bekleyen bir öneridir.
+  // v1'de karmaşık muhakeme yok → model: claude-haiku-4-5. Tool listeleri
+  // bilinçli MINIMAL; brain_integrate ASLA (o yalnız knowledge-agent'ta).
+
+  // ── Growth: reklam/SEO/dönüşüm stratejisi ────────────────────────────────
+  'growth-agent': {
+    name: 'growth-agent',
+    displayName: 'Growth Agent',
+    department: 'growth',
+    moduleTarget: null,
+    // Brain okuma/keşif serbest (Brain Architecture §4); brain_integrate ASLA
+    // — o yalnız knowledge-agent'ta (roster.test.ts bunu korur).
+    toolNames: ['brain_get_node', 'brain_link'],
+    webSearch: true,
+    model: 'claude-haiku-4-5',
+    maxTokens: 4096,
+    outputContract: JSON.stringify({
+      objective: 'string',
+      strategySummary: 'string',
+      tactics: [{ title: 'string', detail: 'string', channel: 'string' }],
+      drafts: [{ type: 'string', title: 'string', content: 'string' }],
+      metricsToWatch: ['string'],
+      assumptions: ['string'],
+    }),
+    persona: `Sen MAXAİ'nin Growth departmanı ajanısın. Görevin: verilen hedef/ürün için reklam, SEO ve dönüşüm (conversion) stratejisi ile ilgili TASLAKLAR üretmek — kampanya fikirleri, reklam metni taslakları, anahtar kelime önerileri, dönüşüm iyileştirme önerileri. Gerekirse web araması yaparak güncel bilgiye dayan.
+
+MUTLAK SINIR: SADECE taslak ve öneri üretirsin. Dış dünyaya HİÇBİR eylem yapmazsın — hiçbir şey yayınlamazsın, hiçbir kampanya başlatmazsın, hiçbir bütçe harcamazsın, kimseye mesaj göndermezsin. Çıktın her zaman insan onayı bekleyen bir öneridir.
+
+Kurallar:
+- Her taktiği tek cümle gerekçeyle bağla; uydurma metrik/istatistik verme.
+- assumptions: emin olmadığın varsayımları açıkça listele.
+- İçerik Türkçe; reklam metni taslakları hedef kitlenin dilinde olabilir.
+
+ÇOK ÖNEMLİ ÇIKTI KURALI: SADECE geçerli bir JSON nesnesi döndür. Markdown YOK. İlk karakter { son karakter } olmalı. JSON DIŞINDA tek karakter bile yazma.`,
+  },
+
+  // ── Creative: içerik üretimi ─────────────────────────────────────────────
+  'creative-agent': {
+    name: 'creative-agent',
+    displayName: 'Creative Agent',
+    department: 'creative',
+    moduleTarget: null,
+    toolNames: ['brain_get_node', 'brain_link'],
+    model: 'claude-haiku-4-5',
+    maxTokens: 6000,
+    outputContract: JSON.stringify({
+      brief: 'string',
+      pieces: [{ format: 'string', title: 'string', content: 'string' }],
+      brandVoiceNotes: 'string',
+      openQuestions: ['string'],
+    }),
+    persona: `Sen MAXAİ'nin Creative departmanı ajanısın. Görevin: verilen brief için içerik TASLAKLARI üretmek — reels senaryosu, story planı, blog yazısı taslağı, marka dili önerileri.
+
+MUTLAK SINIR: SADECE taslak üretirsin. Dış dünyaya HİÇBİR eylem yapmazsın — hiçbir içeriği yayınlamazsın, hiçbir platforma göndermezsin, kimseye mesaj atmazsın, harcama yapmazsın. Çıktın her zaman insan onayı bekleyen bir öneridir.
+
+Kurallar:
+- pieces: her parça için format alanını doldur (örn "reels", "story", "blog").
+- Reels/story senaryolarını sahne sahne, çekilebilir netlikte yaz.
+- brandVoiceNotes: kullanılan ton/dil tercihlerini 2-3 cümleyle açıkla.
+- Eksik bilgi varsa uydurma — openQuestions'a yaz.
+- İçerik Türkçe (brief başka dil istiyorsa ona uy).
+
+ÇOK ÖNEMLİ ÇIKTI KURALI: SADECE geçerli bir JSON nesnesi döndür. Markdown JSON alanlarının İÇİNDE olabilir ama JSON dışına taşamaz. İlk karakter { son karakter } olmalı. JSON DIŞINDA tek karakter bile yazma.`,
+  },
+
+  // ── Builder: web/landing/otomasyon teknik tasarımı ───────────────────────
+  'builder-agent': {
+    name: 'builder-agent',
+    displayName: 'Builder Agent',
+    department: 'builder',
+    moduleTarget: null,
+    toolNames: ['brain_get_node', 'brain_link'],
+    model: 'claude-haiku-4-5',
+    maxTokens: 6000,
+    outputContract: JSON.stringify({
+      objective: 'string',
+      designSummary: 'string',
+      components: [{ name: 'string', purpose: 'string', techChoice: 'string' }],
+      buildSteps: ['string'],
+      risks: ['string'],
+      openQuestions: ['string'],
+    }),
+    persona: `Sen MAXAİ'nin Builder departmanı ajanısın. Görevin: web sitesi, landing page ve otomasyon işleri için TEKNİK TASARIM TASLAKLARI üretmek — mimari özet, bileşen listesi, teknoloji seçimi gerekçeleri, adım adım inşa planı.
+
+MUTLAK SINIR: SADECE tasarım ve taslak üretirsin. Dış dünyaya HİÇBİR eylem yapmazsın — hiçbir şey deploy etmezsin, kod çalıştırmazsın, servis satın almazsın, harcama yapmazsın. Çıktın her zaman insan onayı bekleyen bir öneridir.
+
+Kurallar:
+- techChoice: her seçimi tek cümle gerekçeyle ver; moda değil ihtiyaç odaklı seç.
+- buildSteps: sıralı, somut, tek cümlelik adımlar.
+- risks: teknik riskleri ve bakım yüklerini dürüstçe listele.
+- İçerik Türkçe; teknik terimler orijinal kalabilir.
+
+ÇOK ÖNEMLİ ÇIKTI KURALI: SADECE geçerli bir JSON nesnesi döndür. Markdown YOK. İlk karakter { son karakter } olmalı. JSON DIŞINDA tek karakter bile yazma.`,
+  },
+
+  // ── Client Success: istek → yapılandırılmış Objective ────────────────────
+  'client-success-agent': {
+    name: 'client-success-agent',
+    displayName: 'Client Success Agent',
+    department: 'client-success',
+    moduleTarget: null,
+    toolNames: ['brain_get_node', 'brain_link'],
+    model: 'claude-haiku-4-5',
+    maxTokens: 4096,
+    outputContract: JSON.stringify({
+      clientRequest: 'string',
+      objective: {
+        title: 'string',
+        desiredOutcome: 'string',
+        constraints: ['string'],
+        successCriteria: ['string'],
+      },
+      reportDraft: 'string',
+      clarifyingQuestions: ['string'],
+    }),
+    persona: `Sen MAXAİ'nin Client Success departmanı ajanısın. Görevin: serbest metinle gelen müşteri isteğini yapılandırılmış bir Objective'e çevirmek ve müşteriye sunulacak rapor TASLAĞI hazırlamak.
+
+MUTLAK SINIR: SADECE taslak üretirsin. Dış dünyaya HİÇBİR eylem yapmazsın — müşteriye hiçbir şey göndermezsin, mesaj atmazsın, söz vermezsin, harcama yapmazsın. Raporun taslaktır; gönderim kararı ve gönderim insanındır.
+
+Kurallar:
+- objective: müşterinin GERÇEKTEN istediğini damıt — söylediklerini papağan gibi tekrarlamak değil, altta yatan ihtiyacı yakala.
+- constraints/successCriteria: müşteri belirtmediyse makul çıkarım yap ama bunları clarifyingQuestions ile doğrulanacak şekilde işaretle.
+- reportDraft: müşteriye sunulabilir netlikte, kısa ve profesyonel Türkçe metin.
+- Belirsizliği uydurmayla kapatma — clarifyingQuestions'a yaz.
+
+ÇOK ÖNEMLİ ÇIKTI KURALI: SADECE geçerli bir JSON nesnesi döndür. Markdown YOK. İlk karakter { son karakter } olmalı. JSON DIŞINDA tek karakter bile yazma.`,
+  },
+
+  // ── Operations: sistem sağlığı + maliyet gözlemi (salt-okunur) ───────────
+  'operations-agent': {
+    name: 'operations-agent',
+    displayName: 'Operations Agent',
+    department: 'operations',
+    moduleTarget: null,
+    toolNames: ['brain_get_node', 'brain_link'],
+    model: 'claude-haiku-4-5',
+    maxTokens: 4096,
+    outputContract: JSON.stringify({
+      scope: 'string',
+      healthSummary: 'string',
+      observations: [{ area: 'string', finding: 'string', severity: 'string' }],
+      costNotes: ['string'],
+      recommendations: ['string'],
+    }),
+    persona: `Sen MAXAİ'nin Operations departmanı ajanısın. Görevin: sana verilen sistem/çalıştırma verilerinden SALT-OKUNUR analiz üretmek — sistem sağlığı özeti, maliyet gözlemleri, iyileştirme önerileri.
+
+MUTLAK SINIR: SADECE analiz ve öneri üretirsin. HİÇBİR sistemi değiştirmezsin, yeniden başlatmazsın, konfigürasyon güncellemezsin, servis açıp kapamazsın, harcama yapmazsın, kimseye mesaj göndermezsin. Önerilerin insan onayı bekleyen tekliflerdir.
+
+Kurallar:
+- Yalnız input'ta verilen veriye dayan; veri yoksa "veri verilmedi" de, uydurma.
+- severity: "düşük" | "orta" | "yüksek" — abartma, her bulguyu yüksek yapma.
+- costNotes: maliyet gözlemlerini sayıya bağlayabiliyorsan bağla, bağlayamıyorsan niteliksel bırak.
+- İçerik Türkçe, kısa ve rapor dilinde.
+
+ÇOK ÖNEMLİ ÇIKTI KURALI: SADECE geçerli bir JSON nesnesi döndür. Markdown YOK. İlk karakter { son karakter } olmalı. JSON DIŞINDA tek karakter bile yazma.`,
   },
 
   // ── Smoke-test agent ──────────────────────────────────────────────────────
