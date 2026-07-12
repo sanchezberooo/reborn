@@ -192,13 +192,13 @@ export const TOOLS: AIToolDef[] = [
   },
   {
     name: 'run_agent',
-    description: 'Uzman bir ajanı çalıştırır ve sonucunu döndürür. Araştırma, plan üretimi veya derin analiz gerektiren işler için kullan.',
+    description: 'Bir MAXAİ departman ajanını çalıştırır ve sonucunu döndürür. Hepsi taslak-üreticidir — dış dünyaya eylem yapmaz. Strateji, içerik, teknik tasarım, müşteri objective\'i veya analiz taslağı gerektiren işler için kullan.',
     inputSchema: {
       type: 'object',
       properties: {
         agentName: {
           type: 'string',
-          description: 'Çalıştırılacak ajan: ingilizce-planlayici | ingilizce-genel-plan | kesif-arastirmaci | burs-toplu-arastirma | burs-derinlestir | essay-brainstorm | essay-critic | knowledge-agent',
+          description: 'Çalıştırılacak ajan: growth-agent | creative-agent | builder-agent | client-success-agent | operations-agent | knowledge-agent',
         },
         agentInput: {
           type: 'object',
