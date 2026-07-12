@@ -59,19 +59,12 @@ export async function getNodesByLayer(
   return (data ?? []).map((r) => mapNodeRow(r as Record<string, unknown>))
 }
 
-/** limit'in kaç katı aday çekilir: post-filter sonrası limit'i doldurabilmek
- *  için pay (retrieval motoru scope bilmez, eleme burada yapılır). */
-const SCOPED_OVERFETCH_FACTOR = 3
-const SCOPED_OVERFETCH_MIN = 30
-
 /**
- * hybridRetrieve'in scope'lu sarmalayıcısı — motorun KENDİSİNE DOKUNMAZ:
- * mevcut hybridRetrieve aynen çağrılır, sonuç entities.scope'a göre süzülür
- * (post-filter). RetrievedEntity zarfında scope alanı olmadığından dönen
- * id'lerin scope'u tek ek sorguyla okunur. limit'in altına düşmemek için
- * motor bilinçli fazla aday getirir (over-fetch) — yine de istenen scope'ta
- * yeterli aday yoksa sonuç limit'ten kısa dönebilir; bu, motoru değiştirmeme
- * kararının kabul edilmiş bedelidir.
+ * hybridRetrieve'in scope'lu sarmalayıcısı: scope, match_entities RPC'sine
+ * (migration 0006) doğrudan parametre olarak iner — benzerlik sıralaması
+ * DB'de istenen scope İÇİNDE yapılır. Eski over-fetch + JS post-filter
+ * yaklaşımına gerek kalmadı; onun "istenen scope'ta yeterli aday yoksa sonuç
+ * limit'ten kısa dönebilir" zafiyeti de bununla kapandı.
  */
 export async function hybridRetrieveScoped(
   query: string,
@@ -81,18 +74,5 @@ export async function hybridRetrieveScoped(
   if (scope !== 'personal' && scope !== 'agent') {
     throw new Error(`hybridRetrieveScoped: geçersiz scope '${scope}' — 'personal' | 'agent'.`)
   }
-  const limit = opts.limit ?? 10
-  const overfetch = Math.max(limit * SCOPED_OVERFETCH_FACTOR, SCOPED_OVERFETCH_MIN)
-  const results = await hybridRetrieve(query, { ...opts, limit: overfetch })
-  if (results.length === 0) return []
-
-  const { supabase } = await brainDeps()
-  const { data, error } = await supabase
-    .from('entities')
-    .select('id, scope')
-    .in('id', results.map((r) => r.id))
-  if (error) throw error
-  const scopeById = new Map((data ?? []).map((r) => [r.id as string, r.scope as BrainScope]))
-
-  return results.filter((r) => scopeById.get(r.id) === scope).slice(0, limit)
+  return hybridRetrieve(query, { ...opts, scope })
 }

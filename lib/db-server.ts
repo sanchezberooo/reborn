@@ -1,7 +1,5 @@
 import 'server-only'
 
-import { invalidateRetrievalCache } from './ai/retrieval-cache'
-
 // Entities & Links (Faz 1 — Unified Entity Core) yazma yolu (migration 0001).
 // Ayrı dosyada yaşamasının nedeni: bu fonksiyonlar LocalEmbeddingProvider
 // (transformers.js + onnxruntime, yalnız sunucu) ve service-role admin
@@ -85,7 +83,6 @@ export async function createEntity(input: CreateEntityInput): Promise<Entity> {
     .single()
   if (error) throw error
 
-  invalidateRetrievalCache()
   return data as Entity
 }
 
@@ -120,7 +117,6 @@ export async function createLink(input: CreateLinkInput): Promise<EntityLink> {
     .single()
   if (error) throw error
 
-  invalidateRetrievalCache()
   return data as EntityLink
 }
 
@@ -129,7 +125,6 @@ export async function deleteEntity(id: string): Promise<void> {
   const { supabase } = await entityDeps()
   const { error } = await supabase.from('entities').delete().eq('id', id)
   if (error) throw error
-  invalidateRetrievalCache()
 }
 
 // ─── Journal köprü senkronu (Faz 2, Görev 1) ─────────────────────────────────
@@ -216,7 +211,6 @@ export async function syncJournalEntryEntity(
       .update({ title, content, embedding, updated_at: new Date().toISOString() })
       .eq('id', existing.id)
     if (error) throw error
-    invalidateRetrievalCache()
     return 'updated'
   }
 
@@ -448,8 +442,6 @@ async function syncSubGoalLink(goalId: string, parentId: string | null): Promise
       kind: 'user',
       label: SUB_GOAL_LINK_LABEL,
     })
-  } else {
-    invalidateRetrievalCache() // silme dalında createLink'in invalidasyonu yok
   }
 }
 
@@ -506,7 +498,6 @@ export async function saveGoal(userId: string, input: GoalInput): Promise<Goal> 
         .update({ title, content, embedding, updated_at: new Date().toISOString() })
         .eq('id', input.id)
       if (updateError) throw updateError
-      invalidateRetrievalCache()
     }
 
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -661,7 +652,6 @@ export async function deleteJournalEntry(userId: string, date: string): Promise<
     .eq('id', row.id as string)
   if (journalError) throw journalError
 
-  invalidateRetrievalCache()
   return true
 }
 
@@ -788,7 +778,6 @@ export async function syncObsidianVaultNotes(
     }
   }
 
-  invalidateRetrievalCache()
   return { created, updated, deleted: toDelete.length, linked }
 }
 

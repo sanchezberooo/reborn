@@ -13,7 +13,6 @@
 //     çağırabilir.
 
 import 'server-only'
-import { invalidateRetrievalCache } from '../ai/retrieval-cache'
 import { resolveSingleUserId } from '../db-server'
 import { brainDeps, mapNodeRow, NODE_COLUMNS } from './db'
 import { linkNodes } from './link-registry'
@@ -73,7 +72,6 @@ export async function createSignal(
     .single()
   if (error) throw error
 
-  invalidateRetrievalCache()
   return mapNodeRow(data as Record<string, unknown>)
 }
 
@@ -133,7 +131,6 @@ export async function integrateNode(
 
   await linkNodes(node.id, signalId, 'derived_from')
 
-  invalidateRetrievalCache()
   return node
 }
 
@@ -184,6 +181,5 @@ export async function updateNodeStatus(id: string, newStatus: NodeStatus): Promi
     .single()
   if (error) throw error
 
-  invalidateRetrievalCache()
   return mapNodeRow(data as Record<string, unknown>)
 }

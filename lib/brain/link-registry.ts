@@ -6,7 +6,6 @@
 // işaretlenir ve supersedes kenarı kurulur; delete yolu bilinçli olarak yok.
 
 import 'server-only'
-import { invalidateRetrievalCache } from '../ai/retrieval-cache'
 import { brainDeps, mapLinkRow, mapNodeRow, LINK_COLUMNS, NODE_COLUMNS } from './db'
 import { LINK_TYPES } from './types'
 import type { BrainLink, BrainNode, LinkType } from './types'
@@ -44,7 +43,6 @@ export async function linkNodes(
     .single()
   if (error) throw error
 
-  invalidateRetrievalCache()
   return mapLinkRow(data as Record<string, unknown>)
 }
 
@@ -125,7 +123,6 @@ export async function supersede(oldId: string, newId: string): Promise<BrainLink
     throw new Error(`supersede: eskitilecek node bulunamadı (${oldId}).`)
   }
 
-  invalidateRetrievalCache()
   return link
 }
 
