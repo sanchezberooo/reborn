@@ -74,7 +74,7 @@ Hepsi SAYIM/LİSTE — hiçbiri Brain'e yazılmaz. Bulgu yoksa o satıra "tespit
 - Detected Project Structure: ...
 
 ## Kim Faydalanır
-- Hangi ajanlar: şu 9 ajanla KABA eşleştirme yap (registry.ts listesi — birebir güncel liste): ingilizce-genel-plan, ingilizce-planlayici, kesif-arastirmaci, burs-toplu-arastirma, burs-derinlestir, essay-brainstorm, essay-critic, knowledge-agent, test-agent. Faydalanacak olanları gerekçeyle say; hiçbiri faydalanmıyorsa açıkça söyle.
+- Hangi ajanlar: şu 6 departman ajanıyla KABA eşleştirme yap (registry.ts aktif rosteri — deprecated/legacy ajanları sayma): growth-agent, creative-agent, builder-agent, client-success-agent, operations-agent, knowledge-agent. Faydalanacak olanları gerekçeyle say; hiçbiri faydalanmıyorsa açıkça söyle.
 - Hangi sektörlerde kullanılabilir: kısa liste.
 - Gereksiz / import edilmemesi gerekenler: hangi kısımlar Reborn bağlamında değersiz, GEREKÇELİ.
 
