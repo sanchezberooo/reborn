@@ -24,6 +24,14 @@ export const AGENT_AVATAR_VISUALS: Record<
   string,
   { label: string; body: string; dark: string; variant: AvatarVariant }
 > = {
+  // departman ajanları (Sprint 7 ofisinde kendi odalarında otururlar)
+  'knowledge-agent':      { label: 'Knowledge',  body: '#8b5cf6', dark: '#6d28d9', variant: 'kitap' },
+  'builder-agent':        { label: 'Builder',    body: '#3b82f6', dark: '#1d4ed8', variant: 'bayrak' },
+  'creative-agent':       { label: 'Creative',   body: '#ec4899', dark: '#be185d', variant: 'ampul' },
+  'growth-agent':         { label: 'Marketing',  body: '#10b981', dark: '#047857', variant: 'hedef' },
+  'client-success-agent': { label: 'C.Success',  body: '#06b6d4', dark: '#0e7490', variant: 'goz' },
+  'operations-agent':     { label: 'Operations', body: '#f59e0b', dark: '#b45309', variant: 'buyutec' },
+  // legacy ajanlar (Common Area'da otururlar)
   'ingilizce-genel-plan': { label: 'İng Plan',   body: '#06b6d4', dark: '#0e7490', variant: 'bayrak' },
   'ingilizce-planlayici': { label: 'Planlayıcı', body: '#3b82f6', dark: '#1d4ed8', variant: 'kitap' },
   'kesif-arastirmaci':    { label: 'Keşif',      body: '#10b981', dark: '#047857', variant: 'buyutec' },

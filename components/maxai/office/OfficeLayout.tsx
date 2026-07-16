@@ -1,53 +1,37 @@
 'use client'
 
-// MAXAİ Ofis — bit-office referanslı kat planının FERAHLATILMIŞ hali: 40×31
-// tile grid (eski 32×32'den geniş), büyük odalar, 4 tile genişliğinde hol,
-// geniş koridorlar. Oda anlamları: sol üst = Çalışma Alanı (registry
-// ajanları), sağ üst = Brain (parlak küre), sol alt = Lounge, sağ alt =
-// Sanchez Komuta.
+// MAXAİ Ofis (Sprint 7 — Company Foundation): sahne artık dekor değil, şirket
+// organizasyonunun haritası. Alanlar: Sanchez Ofisi, Executive Council (13
+// head koltuğu + başkan), Agent Intelligence Core (Brain küresi — canlı
+// retrieval sinyali), Common Area (legacy ajanların oturduğu hol) ve 13
+// departman odası (lib/company/registry.ts'ten türetilir; geometri
+// floor-plan.ts'te yaşar, bu dosya yalnız çizer).
 //
-// CANLI VERİ: avatarlar lib/agents/registry.ts'teki gerçek ajanlardır
-// (/api/agents/list); durumları /api/agents/runs'tan 5 sn'de bir çekilir.
-// Masa sayısı = gerçek ajan sayısı (boş "büyüme masası" yok). Durum dili
-// renk+ikon+metin üçlüsüdür (StatusBadge) — masa altında ve alt status
-// bar'da aynı component. Avatar çizimi AgentAvatar.tsx'te (rol rozetli
-// geometrik dil). Sanchez registry ajanı değil (chat orkestratörü) —
-// Komuta odasında sabit, koşu rozeti almaz, tıklanamaz.
+// CANLI VERİ: runtime ajanlar (/api/agents/list) findSeatByRuntimeAgent ile
+// departman odalarına dağıtılır — eşleşmeyenler (emekli hat) Common Area'da
+// oturur. Durumlar /api/agents/runs'tan 5 sn'de bir; Brain küresi
+// /api/brain/activity. Boş departman odaları placeholder'dır (masa + bitki)
+// ama oda kimliği company registry'ye bağlı — canlı veri bağlamak = ajanı
+// registry'de koltuğa oturtmak, sahne kodu değişmez.
 //
-// ETKİLEŞİM: masa/avatar tıklanınca AgentDetailPanel açılır (geniş ekranda
-// sağda yan panel, dar ekranda alttan sheet). selectedAgent local state'tir:
-// tek tüketicisi bu sahne, polling verisi de burada — global store gereksiz.
-// Sahnenin boş bir yerine tıklamak paneli kapatır.
-//
-// Bina dışında uzay/yıldız arka planı korunur (bilinçli tercih); odaların
-// içi aydınlık — kasvet içeride değil, dışarıda kalır.
+// ETKİLEŞİM: avatar tıklanınca AgentDetailPanel (geniş ekranda yan panel,
+// dar ekranda alttan sheet). Sanchez registry ajanı değil — kendi ofisinde
+// sabit, koşu rozeti almaz, tıklanamaz. Uzay arka planı bilinçli korunur.
 
 import { useEffect, useState } from 'react'
+import { findSeatByRuntimeAgent, getCompanyDepartment } from '@/lib/company/registry'
+import type { CompanyDepartmentId } from '@/lib/company/types'
 import AgentAvatar, { AGENT_AVATAR_VISUALS, FALLBACK_AVATAR_VISUAL } from './AgentAvatar'
 import AgentDetailPanel from './AgentDetailPanel'
 import StatusBadge, { statusFromRun, type AgentStatus } from './StatusBadge'
 import { fmtRelative, runSummary, type AgentMeta, type AgentRun } from './office-data'
-
-const COLS = 40
-const ROWS = 31
-const T = 8 // SVG birimi / tile
-
-// ── kat planı ─────────────────────────────────────────────────────────────────
-// Zemin dikdörtgenleri tile koordinatında (x=col, y=row, w, h). Duvarlar elle
-// çizilmez: zemine 8-komşulukla değen her boş hücre otomatik duvar olur. Böylece
-// kapılar = iki bölgeyi köprüleyen zemin hücreleri; plan tutarlılığı garantili.
-const FLOOR_RECTS: Array<{ x: number; y: number; w: number; h: number }> = [
-  { x: 2, y: 2, w: 20, h: 13 },   // sol üst: çalışma alanı
-  { x: 11, y: 15, w: 2, h: 1 },   // çalışma alanı kapısı (güneye, hole)
-  { x: 26, y: 2, w: 12, h: 9 },   // sağ üst: Brain odası
-  { x: 30, y: 11, w: 3, h: 5 },   // Brain koridoru (güneye, hole)
-  { x: 8, y: 16, w: 28, h: 4 },   // merkez hol (yatay, 4 tile ferah)
-  { x: 16, y: 20, w: 4, h: 6 },   // dikey koridor (hol → alt odalar)
-  { x: 2, y: 22, w: 12, h: 8 },   // sol alt: Lounge
-  { x: 14, y: 24, w: 2, h: 2 },   // Lounge kapısı (doğuya, koridora)
-  { x: 22, y: 22, w: 14, h: 8 },  // sağ alt: Sanchez Komuta
-  { x: 20, y: 24, w: 2, h: 2 },   // Komuta kapısı (batıya, koridora)
-]
+import {
+  COLS, ROWS, T,
+  COMMON_AREA, COMMON_SEAT_XS, COMMON_SEAT_Y,
+  DEPT_ROOMS, deptDeskAnchor,
+  EXECUTIVE_COUNCIL_ROOM, FLOOR_RECTS, INTELLIGENCE_CORE, SANCHEZ_OFFICE,
+  type DeptRoom,
+} from './floor-plan'
 
 function buildGrid(): { floor: boolean[][]; wall: boolean[][] } {
   const floor: boolean[][] = Array.from({ length: ROWS }, () => Array(COLS).fill(false))
@@ -112,6 +96,7 @@ const C = {
   plantLeaf: '#34d399',
   metal: '#b7bec9',
   metalEdge: '#828a96',
+  council: '#f59e0b',
 }
 
 // ── mobilya primitifleri (tile koordinatı, piksel-art bloklar) ────────────────
@@ -133,7 +118,6 @@ function Desk({ x, y }: { x: number; y: number }) {
 }
 
 function Sofa({ x, y, facing }: { x: number; y: number; facing: 'down' | 'up' }) {
-  // 3 kişilik koltuk: gövde + sırtlık + 2 kolçak + 3 minder çizgisi
   const backY = facing === 'down' ? y : y + 1.05
   return (
     <g>
@@ -144,17 +128,6 @@ function Sofa({ x, y, facing }: { x: number; y: number; facing: 'down' | 'up' })
       {[1.35, 2.85, 4.35].map((cx) => (
         <line key={cx} x1={x + cx} y1={y + (facing === 'down' ? 0.7 : 0.1)} x2={x + cx} y2={y + (facing === 'down' ? 1.6 : 1.0)} stroke={C.sofaEdge} strokeWidth={0.07} opacity={0.6} />
       ))}
-    </g>
-  )
-}
-
-function Armchair({ x, y }: { x: number; y: number }) {
-  return (
-    <g>
-      <rect x={x} y={y} width={1.6} height={2} rx={0.24} fill={C.sofa} stroke={C.sofaEdge} strokeWidth={0.09} />
-      <rect x={x} y={y} width={0.5} height={2} rx={0.2} fill={C.sofaEdge} opacity={0.55} />
-      <rect x={x} y={y - 0.02} width={1.6} height={0.45} rx={0.18} fill={C.sofaEdge} opacity={0.4} />
-      <rect x={x} y={y + 1.57} width={1.6} height={0.45} rx={0.18} fill={C.sofaEdge} opacity={0.4} />
     </g>
   )
 }
@@ -199,15 +172,6 @@ function Vending({ x, y }: { x: number; y: number }) {
   )
 }
 
-function Printer({ x, y }: { x: number; y: number }) {
-  return (
-    <g>
-      <rect x={x} y={y + 0.35} width={1.6} height={1.0} rx={0.12} fill={C.metal} stroke={C.metalEdge} strokeWidth={0.08} />
-      <rect x={x + 0.3} y={y} width={1.0} height={0.45} rx={0.08} fill="#e6e9ee" stroke={C.metalEdge} strokeWidth={0.06} />
-    </g>
-  )
-}
-
 function Cooler({ x, y }: { x: number; y: number }) {
   return (
     <g>
@@ -217,17 +181,7 @@ function Cooler({ x, y }: { x: number; y: number }) {
   )
 }
 
-function Whiteboard({ x, y, w }: { x: number; y: number; w: number }) {
-  return (
-    <g>
-      <rect x={x} y={y} width={w} height={0.8} rx={0.08} fill="#f1f5f9" stroke={C.metalEdge} strokeWidth={0.08} />
-      <line x1={x + 0.4} y1={y + 0.28} x2={x + w * 0.55} y2={y + 0.28} stroke="#94a3b8" strokeWidth={0.08} />
-      <line x1={x + 0.4} y1={y + 0.52} x2={x + w * 0.4} y2={y + 0.52} stroke="#94a3b8" strokeWidth={0.08} />
-    </g>
-  )
-}
-
-// Komuta odası duvar panosu: 3 segmentli cyan ekran şeridi
+// Duvar panosu: 3 segmentli cyan ekran şeridi (Sanchez Ofisi)
 function WallScreens({ x, y }: { x: number; y: number }) {
   return (
     <g>
@@ -239,31 +193,51 @@ function WallScreens({ x, y }: { x: number; y: number }) {
   )
 }
 
-// ── Brain küresi ──────────────────────────────────────────────────────────────
-// İki mod: sakin (varsayılan yavaş nabız) ve aktif (son ~10 sn'de gerçek bir
-// hibrit retrieval koştu — /api/brain/activity). Aktifte nabız hızlanır
-// (1.2s), yörünge hızlanır (5s), halo + çekirdek mor doygunluğu artar; mod
-// geçişini 800ms opacity transition'lı katmanlar yumuşatır (animasyon sınıfı
-// anahtarlaması tek başına sert görünürdü).
+// ── Executive Council masası ─────────────────────────────────────────────────
+// 13 head koltuğu (6 üst + 6 alt + 1 sağ) + masa başında başkan koltuğu
+// (amber — Sanchez'in karar makamı). Koltuk sayısı EXECUTIVE_COUNCIL üyeleriyle
+// aynı kavramdır; çizim sabittir çünkü konsey 13 head'dir (test korur).
+
+function CouncilTable({ x, y }: { x: number; y: number }) {
+  const tableX = x + 4
+  const tableY = y + 2.9
+  const seatsTop = [0, 1, 2, 3, 4, 5].map((i) => ({ cx: tableX + 0.9 + i * 1.9, cy: tableY - 1.1 }))
+  const seatsBottom = [0, 1, 2, 3, 4, 5].map((i) => ({ cx: tableX + 0.9 + i * 1.9, cy: tableY + 3.05 }))
+  const seatRight = { cx: tableX + 12.4, cy: tableY + 0.95 }
+  return (
+    <g>
+      <rect x={tableX} y={tableY} width={12} height={2.6} rx={0.5} fill={C.deskTop} stroke={C.deskEdge} strokeWidth={0.1} />
+      <rect x={tableX + 0.7} y={tableY + 0.7} width={10.6} height={1.2} rx={0.3} fill="#e6e9ee" />
+      {[...seatsTop, ...seatsBottom, seatRight].map((s, i) => (
+        <rect key={i} x={s.cx - 0.45} y={s.cy - 0.4} width={0.9} height={0.8} rx={0.2}
+          fill={C.chair} stroke={C.deskEdge} strokeWidth={0.07} />
+      ))}
+      {/* başkan koltuğu — masa başı, amber */}
+      <rect x={tableX - 1.7} y={tableY + 0.55} width={1.1} height={1.5} rx={0.24}
+        fill={C.council} stroke="#b45309" strokeWidth={0.09} />
+    </g>
+  )
+}
+
+// ── Brain küresi (Agent Intelligence Core) ────────────────────────────────────
+// İki mod: sakin ve aktif (son ~10 sn'de gerçek bir hibrit retrieval koştu —
+// /api/brain/activity). Aktifte nabız/yörünge hızlanır, halo belirir; geçişi
+// 800ms opacity transition yumuşatır.
 
 function BrainSphere({ x, y, active }: { x: number; y: number; active: boolean }) {
   return (
     <g>
-      {/* zemin halkası */}
       <circle cx={x} cy={y} r={3.0} fill="#ede9fe" opacity={0.55} />
       <circle cx={x} cy={y} r={3.0} fill="none" stroke="#c4b5fd" strokeWidth={0.16} opacity={0.8} />
-      {/* aktif halo: yumuşak geçişi veren sabit parlaklık katmanı */}
       <circle
         cx={x} cy={y} r={2.85} fill="url(#brainGlow)"
         opacity={active ? 0.75 : 0}
         style={{ transition: 'opacity 800ms ease' }}
       />
-      {/* dış glow (nabız) */}
       <circle
         className={active ? 'maxai-brain-pulse-active' : 'maxai-brain-pulse'}
         cx={x} cy={y} r={2.45} fill="url(#brainGlow)"
       />
-      {/* yörünge halkası */}
       <circle
         className={active ? 'maxai-brain-orbit-active' : 'maxai-brain-orbit'}
         cx={x} cy={y} r={2.05}
@@ -271,7 +245,6 @@ function BrainSphere({ x, y, active }: { x: number; y: number; active: boolean }
         strokeDasharray="0.55 0.75" opacity={0.75}
         style={{ transformOrigin: 'center', transformBox: 'fill-box' }}
       />
-      {/* çekirdek + aktifte mor doygunlaşma */}
       <circle cx={x} cy={y} r={1.4} fill="url(#brainCore)" />
       <circle
         cx={x} cy={y} r={1.4} fill="#7c3aed"
@@ -284,11 +257,11 @@ function BrainSphere({ x, y, active }: { x: number; y: number; active: boolean }
 }
 
 // Oda tabelası: duvar sırasının üstünde açık renk yazı
-function RoomSign({ x, y, text }: { x: number; y: number; text: string }) {
+function RoomSign({ x, y, text, size = 0.78 }: { x: number; y: number; text: string; size?: number }) {
   return (
     <text
       x={x} y={y} textAnchor="middle"
-      fontSize={0.78} fontWeight={700} letterSpacing="0.22em"
+      fontSize={size} fontWeight={700} letterSpacing="0.18em"
       fill={C.sign} opacity={0.9}
       style={{ textTransform: 'uppercase', fontFamily: 'system-ui, sans-serif' }}
     >
@@ -321,20 +294,10 @@ function SvgStatusBadge({ cx, y, status }: { cx: number; y: number; status: Agen
 }
 
 // ── canlı ajan durumu (registry + agent_runs) ────────────────────────────────
-// Tipler ve fmtRelative/runSummary yardımcıları office-data.ts'te
-// (AgentDetailPanel ile paylaşılıyor).
 
 const POLL_MS = 5000
 /** Son retrieval bu pencerenin içindeyse Brain küresi "aktif" moda geçer. */
 const BRAIN_ACTIVE_WINDOW_MS = 10_000
-
-/** Çalışma alanı masa slotları: 4 + 3 dizilim, masalar arası gerçek boşluk
- *  (yatay 4.8, dikey 6.0 tile). Masa sayısı = gerçek ajan sayısı; boş
- *  "büyüme masası" yok — masa yalnız ajanıyla birlikte çizilir. */
-const DESK_SLOTS: Array<{ x: number; y: number }> = [
-  { x: 2.8, y: 3.3 }, { x: 7.6, y: 3.3 }, { x: 12.4, y: 3.3 }, { x: 17.2, y: 3.3 },
-  { x: 5.2, y: 9.3 }, { x: 10.0, y: 9.3 }, { x: 14.8, y: 9.3 },
-]
 
 // ── uzay arka planı (önceki sahneden korunuyor) ───────────────────────────────
 
@@ -414,6 +377,86 @@ export default function OfficeLayout() {
 
   const selectedAgent = agents.find((a) => a.name === selectedAgentId) ?? null
 
+  // Runtime ajan → departman odası dağıtımı (company registry köprüsü).
+  // Koltuğu olmayanlar legacy hattır — Common Area'da oturur.
+  const roomAgent: Partial<Record<CompanyDepartmentId, AgentMeta>> = {}
+  const commonAgents: AgentMeta[] = []
+  for (const agent of agents) {
+    const companySeat = findSeatByRuntimeAgent(agent.name)
+    if (companySeat && !roomAgent[companySeat.departmentId]) roomAgent[companySeat.departmentId] = agent
+    else commonAgents.push(agent)
+  }
+
+  /** Tıklanabilir avatar sarmalayıcısı — masa/hol ortak etkileşim dili. */
+  const renderClickableAgent = (
+    agent: AgentMeta,
+    pos: { x: number; y: number },
+    opts?: { withDesk?: boolean },
+  ) => {
+    const visual =
+      AGENT_AVATAR_VISUALS[agent.name] ??
+      { label: agent.displayName.slice(0, 10), ...FALLBACK_AVATAR_VISUAL }
+    const status = statusFromRun(latestByAgent[agent.name]?.status)
+    const isSelected = selectedAgentId === agent.name
+    const select = () =>
+      setSelectedAgentId((cur) => (cur === agent.name ? null : agent.name))
+    return (
+      <g
+        key={agent.name}
+        role="button"
+        tabIndex={0}
+        aria-label={`${agent.displayName} detayını aç`}
+        className="cursor-pointer focus:outline-none"
+        onClick={(e) => { e.stopPropagation(); select() }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select() }
+        }}
+      >
+        {/* görünmez tıklama alanı: masa + avatar + rozetin tamamı */}
+        <rect x={pos.x - 0.35} y={pos.y - 1.05} width={3.7} height={6.2} fill="transparent" />
+        {isSelected && (
+          <rect
+            x={pos.x - 0.35} y={pos.y - 1.05} width={3.7} height={6.2} rx={0.35}
+            fill="none" stroke="#67e8f9" strokeWidth={0.12}
+            strokeDasharray="0.5 0.35" opacity={0.9}
+          />
+        )}
+        {opts?.withDesk && <Desk x={pos.x} y={pos.y} />}
+        <AgentAvatar
+          x={pos.x + 0.85}
+          y={pos.y + 0.65}
+          body={visual.body}
+          dark={visual.dark}
+          name={visual.label}
+          variant={visual.variant}
+          status={status}
+          labelSize={0.56}
+        />
+        <SvgStatusBadge cx={pos.x + 1.65} y={pos.y + 3.55} status={status} />
+      </g>
+    )
+  }
+
+  const renderDeptRoom = (room: DeptRoom) => {
+    const desk = deptDeskAnchor(room)
+    const occupant = roomAgent[room.id]
+    const department = getCompanyDepartment(room.id)
+    return (
+      <g key={room.id} aria-label={`${department?.displayName ?? room.id} odası`}>
+        <RoomSign x={room.x + room.w / 2} y={room.y - 0.22} text={room.sign} size={0.62} />
+        {occupant ? (
+          renderClickableAgent(occupant, desk, { withDesk: true })
+        ) : (
+          <>
+            {/* boş koltuk — oda kuruldu, ajanı henüz işe alınmadı */}
+            <Desk x={desk.x} y={desk.y} />
+            <Plant x={room.x + 0.4} y={room.y + room.h - 1.9} />
+          </>
+        )}
+      </g>
+    )
+  }
+
   return (
     <div className="flex h-full min-h-[520px] w-full">
     <div
@@ -470,7 +513,7 @@ export default function OfficeLayout() {
         preserveAspectRatio="xMidYMid meet"
         className="relative z-10 mx-auto h-full w-full p-2"
         role="img"
-        aria-label="MAXAİ Ofis kat planı"
+        aria-label="MAXAİ şirket kat planı"
       >
         <defs>
           <radialGradient id="brainCore">
@@ -501,98 +544,66 @@ export default function OfficeLayout() {
             ))}
           </g>
 
-          {/* ── sol üst: Çalışma Alanı — registry ajanları, canlı durum ──
-              7 slot (4+3 dizilim, geniş aralık); masa yalnız gerçek ajan
-              için çizilir. Rozet: masa altında StatusBadge (foreignObject). */}
-          <RoomSign x={5.5} y={1.78} text="Çalışma Alanı" />
-          <Whiteboard x={10} y={1.1} w={5} />
-          {agents.slice(0, DESK_SLOTS.length).map((agent, i) => {
-            const slot = DESK_SLOTS[i]
-            const visual =
-              AGENT_AVATAR_VISUALS[agent.name] ??
-              { label: agent.displayName.slice(0, 10), ...FALLBACK_AVATAR_VISUAL }
-            const status = statusFromRun(latestByAgent[agent.name]?.status)
-            const isSelected = selectedAgentId === agent.name
-            const select = () =>
-              setSelectedAgentId((cur) => (cur === agent.name ? null : agent.name))
-            return (
-              <g
-                key={agent.name}
-                role="button"
-                tabIndex={0}
-                aria-label={`${agent.displayName} detayını aç`}
-                className="cursor-pointer focus:outline-none"
-                onClick={(e) => { e.stopPropagation(); select() }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select() }
-                }}
-              >
-                {/* görünmez tıklama alanı: masa + avatar + rozetin tamamı */}
-                <rect x={slot.x - 0.35} y={slot.y - 1.05} width={3.7} height={6.2} fill="transparent" />
-                {isSelected && (
-                  <rect
-                    x={slot.x - 0.35} y={slot.y - 1.05} width={3.7} height={6.2} rx={0.35}
-                    fill="none" stroke="#67e8f9" strokeWidth={0.12}
-                    strokeDasharray="0.5 0.35" opacity={0.9}
-                  />
-                )}
-                <Desk x={slot.x} y={slot.y} />
-                <AgentAvatar
-                  x={slot.x + 0.85}
-                  y={slot.y + 0.65}
-                  body={visual.body}
-                  dark={visual.dark}
-                  name={visual.label}
-                  variant={visual.variant}
-                  status={status}
-                  labelSize={0.56}
-                />
-                <SvgStatusBadge cx={slot.x + 1.65} y={slot.y + 3.55} status={status} />
-              </g>
-            )
-          })}
-
-          {/* ── sağ üst: Brain odası ── */}
-          <RoomSign x={32} y={1.78} text="Brain" />
-          <BrainSphere x={32} y={6.2} active={brainActive} />
-          <Plant x={26.6} y={2.4} />
-          <Plant x={36.2} y={2.4} />
-
-          {/* ── hol: su sebili + bitki + yazıcı + otomat ── */}
-          <Cooler x={9.5} y={17.2} />
-          <Plant x={12.5} y={16.5} />
-          <Printer x={31.5} y={17} />
-          <Vending x={33.6} y={16.8} />
-
-          {/* ── sol alt: Lounge ── */}
-          <RoomSign x={8} y={21.78} text="Lounge" />
-          <rect x={3} y={23} width={8.5} height={5.4} rx={0.3} fill="#f2f3f6" />
-          <Sofa x={4.5} y={23.4} facing="down" />
-          <Sofa x={4.5} y={26.9} facing="up" />
-          <CoffeeTable x={5.9} y={25.3} />
-          <Armchair x={2.5} y={25.0} />
-          <Armchair x={10.7} y={25.0} />
-          <Plant x={2.4} y={22.3} />
-
-          {/* ── sağ alt: Sanchez Komuta ── */}
-          <RoomSign x={29} y={21.78} text="Komuta" />
-          <WallScreens x={26} y={22.2} />
-          <Cabinet x={22.4} y={22.5} />
-          <Cabinet x={23.35} y={22.5} />
-          {/* komuta masası: daha büyük masa + 3 ekran */}
+          {/* ── Sanchez Ofisi — komuta masası, registry ajanı değil ── */}
+          <RoomSign
+            x={SANCHEZ_OFFICE.x + SANCHEZ_OFFICE.w / 2}
+            y={SANCHEZ_OFFICE.y - 0.22}
+            text={SANCHEZ_OFFICE.sign}
+          />
+          <WallScreens x={SANCHEZ_OFFICE.x + 3} y={SANCHEZ_OFFICE.y + 0.2} />
+          <Cabinet x={SANCHEZ_OFFICE.x + 0.4} y={SANCHEZ_OFFICE.y + 0.5} />
+          <Cabinet x={SANCHEZ_OFFICE.x + 1.35} y={SANCHEZ_OFFICE.y + 0.5} />
           <g>
-            <rect x={25.7} y={24.7} width={6} height={1.5} rx={0.12} fill={C.deskTop} stroke={C.deskEdge} strokeWidth={0.09} />
-            <rect x={27.9} y={23.65} width={1.6} height={1.15} rx={0.08} fill={C.monitor} />
-            <rect x={28.05} y={23.8} width={1.3} height={0.8} fill={C.screen} opacity={0.9} />
-            <rect x={26.3} y={23.9} width={1.25} height={0.95} rx={0.08} fill={C.monitor} />
-            <rect x={26.42} y={24.02} width={1.0} height={0.65} fill={C.screen} opacity={0.75} />
-            <rect x={29.85} y={23.9} width={1.25} height={0.95} rx={0.08} fill={C.monitor} />
-            <rect x={29.97} y={24.02} width={1.0} height={0.65} fill={C.screen} opacity={0.75} />
-            <rect x={28.3} y={25.05} width={0.85} height={0.24} rx={0.06} fill={C.deskEdge} opacity={0.55} />
-            <rect x={28.25} y={26.5} width={0.95} height={0.9} rx={0.2} fill={C.chair} stroke={C.deskEdge} strokeWidth={0.07} />
+            <rect x={6} y={5.5} width={6} height={1.5} rx={0.12} fill={C.deskTop} stroke={C.deskEdge} strokeWidth={0.09} />
+            <rect x={8.2} y={4.45} width={1.6} height={1.15} rx={0.08} fill={C.monitor} />
+            <rect x={8.35} y={4.6} width={1.3} height={0.8} fill={C.screen} opacity={0.9} />
+            <rect x={6.6} y={4.7} width={1.25} height={0.95} rx={0.08} fill={C.monitor} />
+            <rect x={6.72} y={4.82} width={1.0} height={0.65} fill={C.screen} opacity={0.75} />
+            <rect x={10.15} y={4.7} width={1.25} height={0.95} rx={0.08} fill={C.monitor} />
+            <rect x={10.27} y={4.82} width={1.0} height={0.65} fill={C.screen} opacity={0.75} />
+            <rect x={8.6} y={5.85} width={0.85} height={0.24} rx={0.06} fill={C.deskEdge} opacity={0.55} />
+            <rect x={8.55} y={7.3} width={0.95} height={0.9} rx={0.2} fill={C.chair} stroke={C.deskEdge} strokeWidth={0.07} />
           </g>
-          <Plant x={34.4} y={28.0} />
-          <AgentAvatar x={30.6} y={25.9} body="#f59e0b" dark="#b45309" name="Sanchez" variant="yildiz" />
+          <AgentAvatar x={12.6} y={6.6} body="#f59e0b" dark="#b45309" name="Sanchez" variant="yildiz" />
+          <Plant x={15.4} y={8.6} />
+
+          {/* ── Executive Council — Company Layer: 13 head koltuğu + başkan ── */}
+          <RoomSign
+            x={EXECUTIVE_COUNCIL_ROOM.x + EXECUTIVE_COUNCIL_ROOM.w / 2}
+            y={EXECUTIVE_COUNCIL_ROOM.y - 0.22}
+            text={EXECUTIVE_COUNCIL_ROOM.sign}
+          />
+          <CouncilTable x={EXECUTIVE_COUNCIL_ROOM.x} y={EXECUTIVE_COUNCIL_ROOM.y} />
+          <Plant x={EXECUTIVE_COUNCIL_ROOM.x + 0.4} y={EXECUTIVE_COUNCIL_ROOM.y + 0.3} />
+          <Plant x={EXECUTIVE_COUNCIL_ROOM.x + EXECUTIVE_COUNCIL_ROOM.w - 1.6} y={EXECUTIVE_COUNCIL_ROOM.y + 0.3} />
+
+          {/* ── Agent Intelligence Core — Brain küresi (canlı retrieval sinyali) ── */}
+          <RoomSign
+            x={INTELLIGENCE_CORE.x + INTELLIGENCE_CORE.w / 2}
+            y={INTELLIGENCE_CORE.y - 0.22}
+            text={INTELLIGENCE_CORE.sign}
+          />
+          <BrainSphere
+            x={INTELLIGENCE_CORE.x + INTELLIGENCE_CORE.w / 2}
+            y={INTELLIGENCE_CORE.y + 4.3}
+            active={brainActive}
+          />
+          <Plant x={INTELLIGENCE_CORE.x + 0.5} y={INTELLIGENCE_CORE.y + 0.4} />
+          <Plant x={INTELLIGENCE_CORE.x + INTELLIGENCE_CORE.w - 1.7} y={INTELLIGENCE_CORE.y + 0.4} />
+
+          {/* ── Common Area — mobilya solda, legacy ajanlar sağda oturur ── */}
+          <RoomSign x={COMMON_AREA.x + 9} y={COMMON_AREA.y - 0.22} text={COMMON_AREA.sign} size={0.62} />
+          <Sofa x={COMMON_AREA.x + 2} y={COMMON_AREA.y + 0.6} facing="down" />
+          <CoffeeTable x={COMMON_AREA.x + 8.2} y={COMMON_AREA.y + 0.9} />
+          <Cooler x={COMMON_AREA.x + 11.6} y={COMMON_AREA.y + 0.8} />
+          <Vending x={COMMON_AREA.x + 13.4} y={COMMON_AREA.y + 0.5} />
+          <Plant x={COMMON_AREA.x + 0.3} y={COMMON_AREA.y + 0.4} />
+          {commonAgents.slice(0, COMMON_SEAT_XS.length).map((agent, i) =>
+            renderClickableAgent(agent, { x: COMMON_SEAT_XS[i], y: COMMON_SEAT_Y }),
+          )}
+
+          {/* ── 13 departman odası — company registry'den ── */}
+          {DEPT_ROOMS.map(renderDeptRoom)}
         </g>
       </svg>
 
@@ -612,7 +623,7 @@ export default function OfficeLayout() {
         ) : (
           <p className="text-2xs text-white/60">
             <span className="mr-1.5 inline-block size-1.5 rounded-full bg-white/30 align-middle" />
-            Ofis hazır, henüz koşu yok — bir ajana tıklayıp detayından başlayabilirsin.
+            Şirket hazır, henüz koşu yok — bir ajana tıklayıp detayından başlayabilirsin.
           </p>
         )}
       </div>
