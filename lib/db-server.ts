@@ -14,6 +14,8 @@ import 'server-only'
 export type EntityType =
   | 'journal' | 'goal' | 'note' | 'project' | 'person'
   | 'task' | 'essay' | 'habit' | 'resource' | 'event'
+  // Sprint 4 (migration 0010) — Personal Brain çekirdek kavramları:
+  | 'identity' | 'decision' | 'preference' | 'reflection'
 
 export type LinkKind = 'semantic' | 'user' | 'wikilink'
 
@@ -322,7 +324,7 @@ export async function saveMemory(
   const memoryId = data.id as string
 
   try {
-    await createEntity({
+    const entity = await createEntity({
       userId,
       type: 'note',
       title: deriveMemoryTitle(input.content),
@@ -330,6 +332,18 @@ export async function saveMemory(
       sourceTable: 'memories',
       sourceId: memoryId,
     })
+
+    // Sprint 4 (Memory Engine): hiçbir kayıt yalnız yaşamamalı — köprü entity
+    // en benzer node'lara otomatik bağlanır (semantic kenar, strength=benzerlik;
+    // hibrit retrieval'ın graf genişletmesi bu kenarları okur). Bağ kurulamaması
+    // kaydı DÜŞÜRMEZ: entity senkronu tamamlandı, bağ ikincil zenginleştirmedir.
+    try {
+      const { autoLinkNode } = await import('./brain/memory-engine')
+      await autoLinkNode(entity.id)
+    } catch (linkError) {
+      console.error('[memories] otomatik ilişki kurulamadı (kayıt korundu):', linkError)
+    }
+
     return { id: memoryId, entitySynced: true }
   } catch (syncError) {
     console.error('[memories] köprü senkronu başarısız (silo kayıt korundu):', syncError)

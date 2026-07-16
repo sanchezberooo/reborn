@@ -19,6 +19,11 @@ const TYPE_TAG: Record<EntityType, string> = {
   habit: '#alışkanlık',
   resource: '#kaynak',
   event: '#etkinlik',
+  // Sprint 4 (migration 0010) — Record<EntityType, string> tam kapsama ister:
+  identity: '#kimlik',
+  decision: '#karar',
+  preference: '#tercih',
+  reflection: '#yansıma',
 }
 
 function relativeTimeTR(iso: string): string {

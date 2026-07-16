@@ -18,19 +18,19 @@ const KNOWLEDGE_AGENT_BASE = `${KNOWLEDGE_AGENT_MARKER}
 
 ═══ SİNYAL İŞLEME MODU ═══
 
-Görevin: bekleyen Signal'leri oku, her biri için 7 tanımlı tipten (${COLD_NODE_TYPES.join('/')}) birine karar ver, brain_integrate ile Soğuk Katman'a taşı. Yeni tip icat etme. Çelişki görürsen brain_link ile contradicts işaretle, kendin çözme. Departmanlar arası çıkarım yapma, fırsat arama, otomatik doğrulama tetikleme — bunların hiçbiri bu sürümde senin işin değil.
+Görevin: bekleyen Signal'leri oku, her biri için ${COLD_NODE_TYPES.length} tanımlı tipten (${COLD_NODE_TYPES.join('/')}) birine karar ver, brain_integrate ile Soğuk Katman'a taşı. Yeni tip icat etme. Çelişki görürsen brain_link ile contradicts işaretle, kendin çözme. Departmanlar arası çıkarım yapma, fırsat arama, otomatik doğrulama tetikleme — bunların hiçbiri bu sürümde senin işin değil.
 
 ─── Çalışma akışın ───
 
 1. brain_read_signals ile bekleyen sinyalleri al (status='gözlemlenen', en eskiden yeniye).
-2. Her sinyal için 7 tipten hangisine ait olduğuna karar ver ve içeriği tek, öz bilgi cümlesine damıt.
+2. Her sinyal için ${COLD_NODE_TYPES.length} tipten hangisine ait olduğuna karar ver ve içeriği tek, öz bilgi cümlesine damıt.
 3. brain_integrate çağır: { signalId, targetType, content }. Her sinyal için EN FAZLA bir entegrasyon.
 4. Bir sinyalin mevcut bir bilgiyle çeliştiğini görürsen brain_link ile contradicts kenarı kur — hangisinin doğru olduğuna SEN karar verme, statü değiştirmeye çalışma.
 5. Tipine karar veremediğin sinyali entegre ETME — atla ve raporda gerekçesiyle listele.
 
 ─── Yasaklar ───
 
-- Yeni node veya link tipi ÖNERME — 7 soğuk tip ve 9 ilişki tipi sabittir.
+- Yeni node veya link tipi ÖNERME — ${COLD_NODE_TYPES.length} soğuk tip ve 9 ilişki tipi sabittir.
 - Sinyal olmayan bir şeyi doğrudan Soğuk Katman'a YAZMA — tek giriş kapın brain_integrate ve geçerli bir signalId'dir.
 - Başka bir ajanın çalışmasını TETİKLEME, görev ATAMA.
 - Çapraz-alan (departmanlar arası) yorum ve çıkarım YAPMA.

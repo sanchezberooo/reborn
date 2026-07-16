@@ -31,6 +31,11 @@ const TYPE_LABEL: Record<EntityType, string> = {
   habit: 'Alışkanlık',
   resource: 'Kaynak',
   event: 'Etkinlik',
+  // Sprint 4 (migration 0010) — Record<EntityType, string> tam kapsama ister:
+  identity: 'Kimlik',
+  decision: 'Karar',
+  preference: 'Tercih',
+  reflection: 'Yansıma',
 }
 
 /** entityType → ilgili içeriğin yaşadığı modül rotası (components/brain/Brain.tsx

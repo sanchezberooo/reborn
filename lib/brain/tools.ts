@@ -36,7 +36,7 @@ export const BRAIN_TOOLS: AIToolDef[] = [
   {
     name: 'brain_integrate',
     description:
-      "Bir sinyali Soğuk Katman bilgisine damıtır: yeni cold node yaratır ve sinyale derived_from kenarı kurar. targetType 7 tanımlı tipten biri olmak ZORUNDA. SADECE Knowledge Agent içindir.",
+      `Bir sinyali Soğuk Katman bilgisine damıtır: yeni cold node yaratır ve sinyale derived_from kenarı kurar. targetType ${COLD_NODE_TYPES.length} tanımlı tipten biri olmak ZORUNDA. SADECE Knowledge Agent içindir.`,
     inputSchema: {
       type: 'object',
       properties: {
