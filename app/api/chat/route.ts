@@ -1,142 +1,23 @@
-import { getAIProvider, TOOLS, MAX_TOOL_ITERATIONS } from '@/lib/ai'
-import type { AIMessage, AIToolResult, AITurn } from '@/lib/ai'
-import { buildSystemPrompt } from '@/lib/sanchez-prompt'
-import { serverExecuteTool } from '@/lib/agents/executor'
-import type { ModuleItem } from '@/lib/modules'
+import { runSanchezTurn } from '@/lib/sanchez/core'
+import type { SanchezTurnRequest } from '@/lib/sanchez/types'
 import type { ChatEvent } from '@/lib/chat-events'
 
-// NDJSON akış protokolü: her satır tek bir ChatEvent JSON'ı (bkz. lib/chat-events.ts).
-// Gerçek token-bazlı streaming — istemci tarafı: components/chat/useSanchezChat.ts
-//
-// Tool-use döngüsü BURADA yaşar; provider (lib/ai) yalnızca tek model turunu
-// soyutlar. AI_PROVIDER=mock ile bu route API key'siz uçtan uca çalışır.
+// /api/chat — Sanchez'in NDJSON taşıyıcısı. Bu route yalnız HTTP zarfıdır:
+// gövdeyi ayrıştırır, olayları NDJSON satırlarına çevirir, stream'i kapatır.
+// Orkestrasyonun tamamı (observe → … → brain-update pipeline'ı, tool
+// döngüsü, hata sözleşmesi) lib/sanchez/core.ts'tedir — istemci tarafı
+// components/chat/useSanchezChat.ts, protokol lib/chat-events.ts.
 
 export async function POST(req: Request) {
-  const { messages, lastConversation, activeModule } = (await req.json()) as {
-    messages: { role: 'user' | 'assistant'; content: string }[]
-    lastConversation?: { role: string; content: string }[]
-    activeModule?: ModuleItem
-  }
-
-  const { getSupabaseAdmin } = await import('@/lib/supabase-admin')
-  const adminClient = getSupabaseAdmin()
-
-  const profileResult = await adminClient.from('profiles').select('*').limit(1).single()
-  const userId = profileResult.data?.id ?? ''
-
-  const { DEFAULT_PROFILE } = await import('@/lib/memory')
-  const profileData = profileResult.data
-  const profile = profileData ? {
-    name: profileData.name ?? DEFAULT_PROFILE.name,
-    age: profileData.age ?? DEFAULT_PROFILE.age,
-    location: profileData.location ?? DEFAULT_PROFILE.location,
-    goal: profileData.goal ?? DEFAULT_PROFILE.goal,
-    ielts_target: profileData.ielts_target ?? DEFAULT_PROFILE.ielts_target,
-    ielts_exam: profileData.ielts_exam ?? DEFAULT_PROFILE.ielts_exam,
-    project: profileData.project ?? DEFAULT_PROFILE.project,
-    application_deadline: profileData.application_deadline ?? DEFAULT_PROFILE.application_deadline,
-    universities: profileData.universities ?? DEFAULT_PROFILE.universities,
-    strengths: profileData.strengths ?? DEFAULT_PROFILE.strengths,
-    weaknesses: profileData.weaknesses ?? DEFAULT_PROFILE.weaknesses,
-  } : DEFAULT_PROFILE
-
-  // Semantik hafıza bağlamı: kullanıcının SON mesajı sorgu olur, hybridRetrieve
-  // ilgili entity'leri getirir (bütçe kırpması buildChatContext'te). Retrieval
-  // hatası boş bağlama düşer, sohbeti düşürmez.
-  //
-  // Yeni kullanıcı (entities çekirdeği boş) → tanışma sohbeti bölümü system
-  // prompt'a eklenir; MockProvider bu marker'la onboarding senaryosuna girer
-  // (roadmap ilke 14). Sorgu hatası onboarding'i tetiklemez, normal akışa düşer.
-  const { needsOnboarding } = await import('@/lib/db-server')
-  const { buildChatContext } = await import('@/lib/ai/chat-context')
-  const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user')?.content ?? ''
-  const [retrieved, onboarding] = await Promise.all([
-    userId ? buildChatContext(lastUserMessage, userId) : Promise.resolve([]),
-    userId ? needsOnboarding(userId).catch(() => false) : Promise.resolve(false),
-  ])
-
-  const systemPrompt = buildSystemPrompt(profile, retrieved, lastConversation, activeModule, onboarding)
-  const provider = getAIProvider()
+  const request = (await req.json()) as SanchezTurnRequest
 
   const readable = new ReadableStream({
     async start(controller) {
       const enc = new TextEncoder()
       const send = (event: ChatEvent) => controller.enqueue(enc.encode(JSON.stringify(event) + '\n'))
-
       try {
-        const currentHistory: AIMessage[] = messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        }))
-
-        // Kaçak döngü guard'ı: model üst üste MAX_TOOL_ITERATIONS'tan fazla
-        // tool turu isterse akış nazikçe kapatılır — hata fırlatılmaz,
-        // stream 'done' ile düzgün biter. Normal kullanım limite yaklaşmaz.
-        let toolRounds = 0
-
-        while (true) {
-          let turn: AITurn | null = null
-
-          // Gerçek zamanlı token akışı + araç başlangıcı bildirimi
-          for await (const event of provider.stream({
-            system: systemPrompt,
-            messages: currentHistory,
-            tools: TOOLS,
-            maxTokens: 4096,
-            webSearch: true,
-          })) {
-            if (event.type === 'text') {
-              send({ type: 'text', text: event.text })
-            } else if (event.type === 'tool_start') {
-              send({ type: 'tool_start', name: event.name })
-            } else if (event.type === 'done') {
-              turn = event.turn
-            }
-          }
-
-          if (!turn || turn.stopReason !== 'tool_use') break
-
-          if (toolRounds >= MAX_TOOL_ITERATIONS) {
-            console.warn(`[Reborn] MAX_TOOL_ITERATIONS (${MAX_TOOL_ITERATIONS}) aşıldı — tool döngüsü durduruldu.`)
-            send({
-              type: 'text',
-              text: '\n\nBu iş beklediğimden fazla adım gerektirdi; bu turu burada durdurdum. Devam etmemi istersen tekrar söyle.',
-            })
-            break
-          }
-          toolRounds++
-
-          currentHistory.push({ role: 'assistant', content: turn.text, raw: turn.raw })
-
-          const toolResults: AIToolResult[] = await Promise.all(
-            turn.toolUses.map(async (tu) => {
-              try {
-                const result = await serverExecuteTool(tu.name, tu.input, userId)
-                const resultStr = typeof result === 'string' ? result : JSON.stringify(result)
-                void adminClient.from('agent_logs').insert({
-                  agent_name: 'sanchez', action: tu.name, result: resultStr.slice(0, 500),
-                })
-                send({ type: 'tool_end', name: tu.name, ok: true })
-                return { toolUseId: tu.id, content: resultStr }
-              } catch (err) {
-                console.error(`[Reborn] tool ${tu.name} error:`, err)
-                send({ type: 'tool_end', name: tu.name, ok: false })
-                return {
-                  toolUseId: tu.id,
-                  content: `Hata: ${err instanceof Error ? err.message : 'Tool çalışmadı'}`,
-                  isError: true,
-                }
-              }
-            }),
-          )
-
-          currentHistory.push({ role: 'tool_results', results: toolResults })
-        }
-
-        send({ type: 'done' })
-      } catch (err) {
-        console.error('[Reborn] AI provider error:', err)
-        send({ type: 'error', message: 'Bir hata oluştu. Tekrar dene.' })
+        // done/error olay garantisi core'dadır; zarfın tek işi kapatmak.
+        await runSanchezTurn(request, send)
       } finally {
         controller.close()
       }
