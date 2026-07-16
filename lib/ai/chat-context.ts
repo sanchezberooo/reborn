@@ -1,34 +1,24 @@
-// Chat bağlamı üreticisi (Faz 1 — hafıza döngüsünün kapanışı): kullanıcının
-// son mesajı sorgu olarak hybridRetrieve'e verilir, dönen entity'ler system
-// prompt'a girecek kompakt satırlara indirgenir. Route'tan ayrı dosyada
-// yaşamasının nedeni: doğrulama testi (lib/memory-loop.test.ts) aynı
-// fonksiyonu route'suz çağırarak "kaydedilen bilgi sonraki sohbetin
-// bağlamına geri geliyor" döngüsünü uçtan uca ölçer.
+// Chat bağlamı üreticisi — Sprint 4'ten itibaren İNCE bir delegasyon katmanı:
+// bağlamın gerçek üretimi Context Engine'dedir (lib/brain/context-engine.ts,
+// "Sanchez'e verilecek context tek yerden" ilkesi). Bu dosyanın kalma nedeni
+// sözleşme sürekliliğidir: çağıranlar (lib/sanchez/core.ts retrieve aşaması,
+// lib/memory-loop.test.ts doğrulama testi) RetrievedContextItem şeklini ve
+// "hata bağlamsız devam eder" garantisini değişmeden almaya devam eder.
+//
+// DAVRANIŞ SÖZLEŞMESİ (Sprint 4 öncesiyle birebir): kaynak profili
+// SANCHEZ_CHAT_SOURCES = yalnız hafıza kaynağı (hibrit retrieval, scope'suz),
+// kaynak limiti 8, snippet 280, ~8000 karakter bütçe — sabitlerin sahibi
+// artık context-engine'dir. Yeni kaynakları (görev/hedef/timeline) chat'e
+// açmak FAZ AI kalibrasyon kararıdır; motor hazır, karar burada verilmez.
 
 import 'server-only'
-import { hybridRetrieve } from './retrieval'
 import { markRetrievalActive } from './retrieval-signal'
 import type { RetrievedContextItem } from '../sanchez-prompt'
 
-const RETRIEVE_LIMIT = 8
-/** Arama kartından (160) daha cömert: prompt bağlamı yorum yapacak kadar metin ister. */
-const SNIPPET_LENGTH = 280
-/** ~2000 token bağlam bütçesi; Türkçe/karışık metinde ~4 karakter/token varsayımı. */
-const CONTEXT_CHAR_BUDGET = 8000
-/** Satır başına format yükü payı (madde imi, tip/tarih etiketi, ayraçlar). */
-const LINE_OVERHEAD_CHARS = 24
-
-function toSnippet(content: string | null): string | null {
-  if (!content) return null
-  const flat = content.replace(/\s+/g, ' ').trim()
-  if (!flat) return null
-  return flat.length > SNIPPET_LENGTH ? `${flat.slice(0, SNIPPET_LENGTH)}…` : flat
-}
-
 /**
- * Sorguya göre ilgili hafızayı (entities) getirir; karakter bütçesini aşan
- * kuyruk atılır. Retrieval hatası sohbeti DÜŞÜRMEZ — boş bağlamla devam
- * edilir (embedding modeli inik/soğukken chat çalışmaya devam etmeli).
+ * Sorguya göre ilgili bağlamı Context Engine'den getirir. Retrieval hatası
+ * sohbeti DÜŞÜRMEZ — boş bağlamla devam edilir (embedding modeli inik/
+ * soğukken chat çalışmaya devam etmeli).
  */
 export async function buildChatContext(
   query: string,
@@ -41,17 +31,14 @@ export async function buildChatContext(
     // Ofis Brain küresi için aktivite sinyali — retrieval başlarken işaretlenir
     // (embedding hatası sohbeti düşürmediği gibi sinyali de düşürmemeli).
     markRetrievalActive()
-    const results = await hybridRetrieve(trimmed, { userId, limit: RETRIEVE_LIMIT })
-    const items: RetrievedContextItem[] = []
-    let used = 0
-    for (const r of results) {
-      const snippet = toSnippet(r.content)
-      const cost = r.title.length + (snippet?.length ?? 0) + LINE_OVERHEAD_CHARS
-      if (used + cost > CONTEXT_CHAR_BUDGET) break
-      used += cost
-      items.push({ type: r.type, title: r.title, snippet, createdAt: r.createdAt })
-    }
-    return items
+    const { buildContext, SANCHEZ_CHAT_SOURCES } = await import('../brain/context-engine')
+    const items = await buildContext({ query: trimmed, userId }, { sources: SANCHEZ_CHAT_SOURCES })
+    return items.map((item) => ({
+      type: item.type,
+      title: item.title,
+      snippet: item.snippet,
+      createdAt: item.createdAt,
+    }))
   } catch (err) {
     console.error('[Reborn] chat retrieval hatası (bağlamsız devam):', err)
     return []
