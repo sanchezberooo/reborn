@@ -56,3 +56,6 @@ desktop.ini
 
 # kişisel/lokal Claude Code ayarları — repoya girmemeli
 .claude/settings.local.json
+AI
+({
+a.departmentId
