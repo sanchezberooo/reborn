@@ -1,7 +1,9 @@
 'use client'
 
 // MAXAI — ortak layout. Sol nav'daki tek "MAXAİ" item'ının altında URL-bazlı
-// 3 alt sekme: Ofis (varsayılan), Panel, Brain.
+// 4 ana sekme (Sprint 7 — MAXAI Company Foundation): Ofis (varsayılan),
+// Agent Panel, Agent Intelligence, Business Intelligence. Başka ana sekme
+// eklenmez; "Agent Brain" adı emekli edildi (/maxai/brain → /maxai/intelligence).
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
@@ -9,8 +11,9 @@ import { cn } from '@/lib/utils'
 
 const TABS = [
   { href: '/maxai/ofis', label: 'Ofis' },
-  { href: '/maxai/panel', label: 'Panel' },
-  { href: '/maxai/brain', label: 'Brain' },
+  { href: '/maxai/panel', label: 'Agent Panel' },
+  { href: '/maxai/intelligence', label: 'Agent Intelligence' },
+  { href: '/maxai/business', label: 'Business Intelligence' },
 ]
 
 export default function MaxaiLayout({ children }: { children: React.ReactNode }) {
