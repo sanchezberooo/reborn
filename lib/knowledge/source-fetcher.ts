@@ -13,8 +13,45 @@
 // limit IP başına 60 istek/saat. Aşımda GitHub 403/429 döner; nazik hata
 // mesajı olarak modele iletilir, retry mekanizması YOK (v1 bilinçli sınırı).
 
-export const SUPPORTED_SOURCE_TYPES = ['github'] as const
-export type SourceType = (typeof SUPPORTED_SOURCE_TYPES)[number]
+/** Knowledge Department'ın uzun vadeli okuma yüzeyi — BİLİNEN kaynak türleri
+ *  (Sprint 2 sözleşmesi). Bu sözlük mimari niyettir: her tür, aşağıdaki
+ *  switch'lere yeni bir case olarak takılır; yeni tür eklemek listeye ekleme
+ *  + case implementasyonudur, çağıran sözleşme (overview/content zarfları)
+ *  değişmez. */
+export const KNOWN_SOURCE_TYPES = [
+  'github',   // kod deposu — UYGULANDI (public repo, REST API; ingestion Sprint 6)
+  'pdf',      // belge çıkarımı — planlı
+  'markdown', // inline markdown belgesi — fetch GEREKTİRMEZ: içerik pipeline'a
+              // doğrudan verilir (lib/knowledge/pipeline.ts); fetch tool'ları
+              // için anlamlı bir uzak çekim yolu yoktur ve olmayacaktır
+  'youtube',  // transkript/metadata — planlı
+  'website',  // sayfa içerik çekimi — planlı
+  'rss',      // akış takibi — planlı
+  'research', // akademik kaynak (arXiv vb.) — planlı
+  'docs',     // harici dokümantasyon sitesi — planlı (Sprint 6 sözlük genişletmesi)
+  'notion',   // Notion çalışma alanı — planlı
+  'gdrive',   // Google Drive belgeleri — planlı
+] as const
+export type KnownSourceType = (typeof KNOWN_SOURCE_TYPES)[number]
+
+/** Fiilen uygulanmış türler — zarflardaki sourceType alanı bu dar tiptir;
+ *  bir tür implement edildikçe buraya taşınır ve zarf tipi otomatik genişler. */
+export const IMPLEMENTED_SOURCE_TYPES = ['github'] as const satisfies readonly KnownSourceType[]
+export type SourceType = (typeof IMPLEMENTED_SOURCE_TYPES)[number]
+
+/** Bilinen-ama-planlı ile hiç tanınmayan türü ayıran ret mesajı — iki
+ *  switch'in ortak default'u. Modele doğru sinyal gider: planlı türde
+ *  "henüz yok", yabancı türde "tanımlı değil". */
+function unsupportedSourceTypeError(toolName: string, requested: unknown): SourceFetchError {
+  const value = String(requested)
+  const known = (KNOWN_SOURCE_TYPES as readonly string[]).includes(value)
+  return {
+    ok: false,
+    error: known
+      ? `${toolName}: sourceType '${value}' henüz desteklenmiyor (planlı tür) — v1 yalnız '${IMPLEMENTED_SOURCE_TYPES.join("', '")}' destekler.`
+      : `${toolName}: sourceType '${value}' tanımlı bir kaynak türü değil ve desteklenmiyor — bilinen türler: ${KNOWN_SOURCE_TYPES.join(', ')}.`,
+  }
+}
 
 /** README ön-bakış kırpma sınırı (referans plan: "ilk ~2000 karakter"). */
 export const README_EXCERPT_CHARS = 2000
@@ -35,6 +72,17 @@ const GITHUB_HEADERS = {
   'X-GitHub-Api-Version': '2022-11-28',
   'User-Agent': 'reborn-knowledge-agent',
 } as const
+
+/** İstek başlıkları — GITHUB_TOKEN env değişkeni varsa Authorization eklenir
+ *  (auth'suz 60 istek/saat → token'la 5000/saat; Sprint 6 toplu ingestion'ın
+ *  fiili ihtiyacı). Token yalnız env'den okunur, çağrı anında çözülür. */
+function githubHeaders(accept?: string): Record<string, string> {
+  const headers: Record<string, string> = { ...GITHUB_HEADERS }
+  if (accept) headers.Accept = accept
+  const token = process.env.GITHUB_TOKEN
+  if (token) headers.Authorization = `Bearer ${token}`
+  return headers
+}
 
 export interface SourceOverview {
   /** Normalize edilmiş kanonik repo URL'i (https://github.com/{owner}/{repo}). */
@@ -115,10 +163,7 @@ export async function fetchSourceOverview(
     case 'github':
       return fetchGitHubOverview(sourceUrl)
     default:
-      return {
-        ok: false,
-        error: `fetch_source_overview: sourceType '${String(requested)}' desteklenmiyor — v1 yalnız 'github' destekler.`,
-      }
+      return unsupportedSourceTypeError('fetch_source_overview', requested)
   }
 }
 
@@ -136,7 +181,7 @@ async function fetchGitHubOverview(sourceUrl: string): Promise<SourceOverviewRes
   let repoRes: Response
   try {
     repoRes = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}`, {
-      headers: GITHUB_HEADERS,
+      headers: githubHeaders(),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     })
   } catch (err) {
@@ -174,7 +219,7 @@ async function fetchGitHubOverview(sourceUrl: string): Promise<SourceOverviewRes
   let readmeExcerpt = ''
   try {
     const readmeRes = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}/readme`, {
-      headers: { ...GITHUB_HEADERS, Accept: 'application/vnd.github.raw+json' },
+      headers: githubHeaders('application/vnd.github.raw+json'),
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     })
     if (readmeRes.ok) {
@@ -233,10 +278,7 @@ export async function fetchSourceContent(
     case 'github':
       return fetchGitHubContent(sourceUrl, paths)
     default:
-      return {
-        ok: false,
-        error: `fetch_source_content: sourceType '${String(requested)}' desteklenmiyor — v1 yalnız 'github' destekler.`,
-      }
+      return unsupportedSourceTypeError('fetch_source_content', requested)
   }
 }
 
@@ -261,6 +303,34 @@ async function fetchGitHubContent(sourceUrl: string, pathsInput: unknown): Promi
     }
   }
 
+  const result = await fetchGitHubFiles(owner, repo, pathsInput, {
+    maxTotalBytes: MAX_CONTENT_TOTAL_BYTES,
+  })
+  return {
+    sourceUrl: `https://github.com/${owner}/${repo}`,
+    sourceType: 'github',
+    ...result,
+  }
+}
+
+export interface FileFetchBudget {
+  /** Toplam bayt tavanı — aşan dosya kırpılır, kalanlar skipped'a düşer. */
+  maxTotalBytes: number
+}
+
+/**
+ * Bütçe-parametreli dosya çekim çekirdeği — hem tool yolu (fetchSourceContent,
+ * 5 dosya / 50KB) hem ingestion (lib/knowledge/ingestion.ts, kendi bütçesi)
+ * BURADAN geçer; ikinci bir çekim döngüsü yazılmaz. Dosyalar SIRAYLA çekilir
+ * (deterministik bütçe, nazik rate-limit tüketimi); path sanitizasyonu ve
+ * hata sözleşmesi tool yoluyla birebir aynıdır.
+ */
+export async function fetchGitHubFiles(
+  owner: string,
+  repo: string,
+  pathsInput: readonly unknown[],
+  budget: FileFetchBudget,
+): Promise<{ files: SourceContentFile[]; skipped: { path: string; reason: string }[]; totalBytes: number }> {
   const files: SourceContentFile[] = []
   const skipped: { path: string; reason: string }[] = []
   let totalBytes = 0
@@ -273,8 +343,8 @@ async function fetchGitHubContent(sourceUrl: string, pathsInput: unknown): Promi
       skipped.push({ path: label, reason: 'GitHub API rate limit aşıldı — çekilmedi.' })
       continue
     }
-    if (totalBytes >= MAX_CONTENT_TOTAL_BYTES) {
-      skipped.push({ path: label, reason: `Toplam ${Math.round(MAX_CONTENT_TOTAL_BYTES / 1024)}KB bütçesi doldu — çekilmedi.` })
+    if (totalBytes >= budget.maxTotalBytes) {
+      skipped.push({ path: label, reason: `Toplam ${Math.round(budget.maxTotalBytes / 1024)}KB bütçesi doldu — çekilmedi.` })
       continue
     }
 
@@ -289,7 +359,7 @@ async function fetchGitHubContent(sourceUrl: string, pathsInput: unknown): Promi
       // Raw Accept başlığı dosya içeriğini doğrudan metin döndürür; yol bir
       // DİZİNSE GitHub JSON listesi döner — content-type ile ayırt edilir.
       res = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}/contents/${safePath}`, {
-        headers: { ...GITHUB_HEADERS, Accept: 'application/vnd.github.raw+json' },
+        headers: githubHeaders('application/vnd.github.raw+json'),
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       })
     } catch (err) {
@@ -317,7 +387,7 @@ async function fetchGitHubContent(sourceUrl: string, pathsInput: unknown): Promi
 
     const text = await res.text()
     const bytes = Buffer.byteLength(text, 'utf8')
-    const remaining = MAX_CONTENT_TOTAL_BYTES - totalBytes
+    const remaining = budget.maxTotalBytes - totalBytes
 
     if (bytes <= remaining) {
       files.push({ path: label, content: text, truncated: false })
@@ -326,15 +396,163 @@ async function fetchGitHubContent(sourceUrl: string, pathsInput: unknown): Promi
       // Bütçeye sığmayan dosya kırpılır (hata fırlatılmaz) — karakter bazlı
       // kesim; UTF-8 çok baytlı karakterlerde küçük sapma kabul edilir.
       files.push({ path: label, content: text.slice(0, remaining), truncated: true })
-      totalBytes = MAX_CONTENT_TOTAL_BYTES
+      totalBytes = budget.maxTotalBytes
     }
+  }
+
+  return { files, skipped, totalBytes }
+}
+
+// ─── Sprint 6: Knowledge Ingestion okuma uçları ─────────────────────────────
+// Hepsi aynı hata sözleşmesindedir ({ ok:false, error } — fırlatma yok) ve
+// aynı whitelist'ten geçer (parseGitHubRepoUrl). Bu uçların tek tüketicisi
+// lib/knowledge/ingestion.ts'tir; tool yüzeyine (source-tools.ts) AÇILMAZLAR.
+
+/** git tree taraması tavanı — dev monorepolarda yanıt yüzbinlerce girdi
+ *  olabilir; yapı analizi için ilk bu kadar yol yeter. */
+export const MAX_TREE_ENTRIES = 2000
+/** İngestion README tavanı (tool yolundaki 2000 karakterlik ön-bakıştan
+ *  farklı: burada belge Brain'e damıtılır, tam metne yakını gerekir). */
+export const MAX_README_BYTES = 40 * 1024
+
+export interface GitHubRepoProfile {
+  sourceUrl: string
+  owner: string
+  repo: string
+  description: string | null
+  topics: string[]
+  stars: number
+  forks: number
+  openIssues: number
+  license: string | null
+  defaultBranch: string
+  createdAt: string | null
+  /** Son push (aktivite çapası). */
+  pushedAt: string | null
+  archived: boolean
+}
+
+export type GitHubRepoProfileResult = GitHubRepoProfile | SourceFetchError
+
+async function githubGet(path: string, accept?: string): Promise<Response | SourceFetchError> {
+  let res: Response
+  try {
+    res = await fetch(`${GITHUB_API_BASE}${path}`, {
+      headers: githubHeaders(accept),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    })
+  } catch (err) {
+    return { ok: false, error: `GitHub API'ye ulaşılamadı: ${err instanceof Error ? err.message : String(err)}` }
+  }
+  if (res.status === 403 || res.status === 429) {
+    return { ok: false, error: 'GitHub API rate limit aşıldı — GITHUB_TOKEN tanımlıysa limit 5000/saat, değilse IP başına 60/saat.' }
+  }
+  if (res.status === 404) {
+    return { ok: false, error: 'GitHub kaynağı bulunamadı (private olabilir — yalnız public repolar desteklenir).' }
+  }
+  if (!res.ok) {
+    return { ok: false, error: `GitHub API beklenmeyen durum döndü: ${res.status}` }
+  }
+  return res
+}
+
+/** Repo profili — ingestion'ın metadata çekirdeği (overview'dan zengin:
+ *  forks/license/branch/tarihler/arşiv durumu). */
+export async function fetchGitHubRepoProfile(sourceUrl: string): Promise<GitHubRepoProfileResult> {
+  const parsed = parseGitHubRepoUrl(sourceUrl)
+  if (!parsed) {
+    return { ok: false, error: 'Yalnız https://github.com/{owner}/{repo} biçimindeki linkler desteklenir.' }
+  }
+  const { owner, repo } = parsed
+
+  const res = await githubGet(`/repos/${owner}/${repo}`)
+  if (!(res instanceof Response)) return res
+
+  const meta = (await res.json()) as {
+    description?: string | null
+    topics?: string[]
+    stargazers_count?: number
+    forks_count?: number
+    open_issues_count?: number
+    license?: { spdx_id?: string | null; name?: string | null } | null
+    default_branch?: string
+    created_at?: string | null
+    pushed_at?: string | null
+    archived?: boolean
   }
 
   return {
     sourceUrl: `https://github.com/${owner}/${repo}`,
-    sourceType: 'github',
-    files,
-    skipped,
-    totalBytes,
+    owner,
+    repo,
+    description: meta.description ?? null,
+    topics: Array.isArray(meta.topics) ? meta.topics.filter((t): t is string => typeof t === 'string') : [],
+    stars: typeof meta.stargazers_count === 'number' ? meta.stargazers_count : 0,
+    forks: typeof meta.forks_count === 'number' ? meta.forks_count : 0,
+    openIssues: typeof meta.open_issues_count === 'number' ? meta.open_issues_count : 0,
+    license: meta.license?.spdx_id && meta.license.spdx_id !== 'NOASSERTION'
+      ? meta.license.spdx_id
+      : meta.license?.name ?? null,
+    defaultBranch: meta.default_branch ?? 'main',
+    createdAt: meta.created_at ?? null,
+    pushedAt: meta.pushed_at ?? null,
+    archived: meta.archived === true,
   }
+}
+
+/** Dil dağılımı — GitHub languages API'sinin ham bayt sayıları. Zarf
+ *  bilinçli ({ languages }): çıplak Record dönseydi 'ok' anahtarlı bir dil
+ *  adı hata ayrımını bozabilirdi (SourceFetchError ile ayırt edilemezdi). */
+export async function fetchGitHubLanguages(
+  owner: string,
+  repo: string,
+): Promise<{ languages: Record<string, number> } | SourceFetchError> {
+  const res = await githubGet(`/repos/${owner}/${repo}/languages`)
+  if (!(res instanceof Response)) return res
+  const body = (await res.json()) as Record<string, unknown>
+  const languages: Record<string, number> = {}
+  for (const [lang, bytes] of Object.entries(body)) {
+    if (typeof bytes === 'number') languages[lang] = bytes
+  }
+  return { languages }
+}
+
+/** Dosya ağacı — default branch'in recursive git tree'si; MAX_TREE_ENTRIES
+ *  tavanıyla kırpılır (truncated bayrağı GitHub'dan da gelebilir). */
+export async function fetchGitHubTree(
+  owner: string,
+  repo: string,
+  branch: string,
+): Promise<{ paths: string[]; truncated: boolean } | SourceFetchError> {
+  const res = await githubGet(`/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`)
+  if (!(res instanceof Response)) return res
+  const body = (await res.json()) as {
+    tree?: { path?: string; type?: string }[]
+    truncated?: boolean
+  }
+  const entries = Array.isArray(body.tree) ? body.tree : []
+  const paths = entries
+    .filter((e) => e.type === 'blob' && typeof e.path === 'string')
+    .map((e) => e.path as string)
+  return {
+    paths: paths.slice(0, MAX_TREE_ENTRIES),
+    truncated: body.truncated === true || paths.length > MAX_TREE_ENTRIES,
+  }
+}
+
+/** Tam README (ingestion) — MAX_README_BYTES tavanıyla; README yoksa null
+ *  (hata değil: README'siz repo meşrudur, kalite motoru puanına yansır). */
+export async function fetchGitHubReadme(
+  owner: string,
+  repo: string,
+): Promise<{ content: string; truncated: boolean } | null | SourceFetchError> {
+  const res = await githubGet(`/repos/${owner}/${repo}/readme`, 'application/vnd.github.raw+json')
+  if (!(res instanceof Response)) {
+    return res.error.includes('bulunamadı') ? null : res
+  }
+  const text = await res.text()
+  if (Buffer.byteLength(text, 'utf8') <= MAX_README_BYTES) {
+    return { content: text, truncated: false }
+  }
+  return { content: text.slice(0, MAX_README_BYTES), truncated: true }
 }
