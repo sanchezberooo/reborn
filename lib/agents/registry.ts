@@ -1,4 +1,6 @@
 import type { AgentDefinition } from './types'
+import type { DepartmentId } from '../departments/types'
+import { validateAgentDepartment } from '../departments/registry'
 import { buildKnowledgeAgentPrompt } from './knowledge-agent-prompt'
 
 export const AGENTS: Record<string, AgentDefinition> = {
@@ -349,7 +351,9 @@ Dil: eleştiriler Türkçe, taslaktan alıntılar orijinal dilinde (İngilizce).
     moduleTarget: null,
     // Brain okuma/keşif serbest (Brain Architecture §4); brain_integrate ASLA
     // — o yalnız knowledge-agent'ta (roster.test.ts bunu korur).
-    toolNames: ['brain_get_node', 'brain_link'],
+    // delegate_task (Sprint 3): departman ajanları birbirine iş emri açabilir
+    // — asenkron kuyruk yolu; dış-eylem değildir, çıktı yine taslaktır.
+    toolNames: ['brain_get_node', 'brain_link', 'delegate_task'],
     webSearch: true,
     model: 'claude-haiku-4-5',
     maxTokens: 4096,
@@ -379,7 +383,7 @@ Kurallar:
     displayName: 'Creative Agent',
     department: 'creative',
     moduleTarget: null,
-    toolNames: ['brain_get_node', 'brain_link'],
+    toolNames: ['brain_get_node', 'brain_link', 'delegate_task'],
     model: 'claude-haiku-4-5',
     maxTokens: 6000,
     outputContract: JSON.stringify({
@@ -408,7 +412,7 @@ Kurallar:
     displayName: 'Builder Agent',
     department: 'builder',
     moduleTarget: null,
-    toolNames: ['brain_get_node', 'brain_link'],
+    toolNames: ['brain_get_node', 'brain_link', 'delegate_task'],
     model: 'claude-haiku-4-5',
     maxTokens: 6000,
     outputContract: JSON.stringify({
@@ -438,7 +442,7 @@ Kurallar:
     displayName: 'Client Success Agent',
     department: 'client-success',
     moduleTarget: null,
-    toolNames: ['brain_get_node', 'brain_link'],
+    toolNames: ['brain_get_node', 'brain_link', 'delegate_task'],
     model: 'claude-haiku-4-5',
     maxTokens: 4096,
     outputContract: JSON.stringify({
@@ -471,7 +475,7 @@ Kurallar:
     displayName: 'Operations Agent',
     department: 'operations',
     moduleTarget: null,
-    toolNames: ['brain_get_node', 'brain_link'],
+    toolNames: ['brain_get_node', 'brain_link', 'delegate_task'],
     model: 'claude-haiku-4-5',
     maxTokens: 4096,
     outputContract: JSON.stringify({
@@ -495,9 +499,12 @@ Kurallar:
   },
 
   // ── Smoke-test agent ──────────────────────────────────────────────────────
+  // department: sistem sağlığı doğrulaması Operations misyonudur; tool'suz
+  // echo ajanı hiçbir yetenek kullanmaz, izin modeline yük getirmez.
   'test-agent': {
     name: 'test-agent',
     displayName: 'Test Agent',
+    department: 'operations',
     persona:
       'You are a test agent. Given the input, reply with ONLY a JSON object ' +
       '{"echo": <one-line summary of input>, "ok": true}, no markdown, no extra text.',
@@ -510,3 +517,66 @@ Kurallar:
 export function getAgent(name: string): AgentDefinition | null {
   return AGENTS[name] ?? null
 }
+
+// ── Dinamik registry API'si ──────────────────────────────────────────────────
+// AGENTS kod-tanımlı çekirdek rosterdir; registerAgent aynı Record'a runtime
+// kayıt ekler (süreç ömürlü — kalıcı/DB-backed ajan tanımı bilinçli ERTELENDİ,
+// o ayrı bir mimari karardır: tanımın kendisi veri olunca versiyonlama, izin
+// ve prompt bütünlüğü soruları açılır). Tek doğruluk kaynağı bu Record'dur;
+// listeleme/yönlendirme her yerde bu API üzerinden yapılır ki roster
+// büyüdüğünde çağıranlar değişmesin.
+
+const AGENT_NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/
+
+export interface ListAgentsOptions {
+  /** true → emekli (deprecated) ajanlar da listelenir; varsayılan false. */
+  includeDeprecated?: boolean
+  department?: DepartmentId
+}
+
+export function listAgents(opts: ListAgentsOptions = {}): AgentDefinition[] {
+  return Object.values(AGENTS).filter((agent) => {
+    if (!opts.includeDeprecated && agent.deprecated) return false
+    if (opts.department && agent.department !== opts.department) return false
+    return true
+  })
+}
+
+/**
+ * Runtime ajan kaydı. İhlalde FIRLATIR (sessiz düşme yok): ad çakışması,
+ * geçersiz ad biçimi, boş persona/sözleşme veya departman izin ihlali
+ * (lib/departments/registry.ts validateAgentDepartment — default-deny)
+ * kaydı reddeder. Başarılı kayıt getAgent/listAgents'a anında görünür.
+ */
+export function registerAgent(def: AgentDefinition): AgentDefinition {
+  if (!AGENT_NAME_RE.test(def.name)) {
+    throw new Error(`registerAgent: '${def.name}' geçersiz ad — kebab-case bekleniyor (örn 'video-agent').`)
+  }
+  if (AGENTS[def.name]) {
+    throw new Error(`registerAgent: '${def.name}' zaten kayıtlı — ad benzersiz olmalı.`)
+  }
+  if (!def.persona.trim()) throw new Error(`registerAgent: '${def.name}' persona boş olamaz.`)
+  if (!def.outputContract.trim()) throw new Error(`registerAgent: '${def.name}' outputContract boş olamaz.`)
+
+  const violations = validateAgentDepartment(def)
+  if (violations.length > 0) {
+    throw new Error(`registerAgent: '${def.name}' departman sözleşmesini ihlal ediyor:\n- ${violations.join('\n- ')}`)
+  }
+
+  AGENTS[def.name] = def
+  return def
+}
+
+/** registerAgent'ın tersi — yalnız runtime kayıtları için (test izolasyonu,
+ *  deneysel ajan söküm yolu). Kod-tanımlı çekirdek roster silinemez. */
+export function unregisterAgent(name: string): boolean {
+  if (!AGENTS[name]) return false
+  if (CORE_AGENT_NAMES.has(name)) {
+    throw new Error(`unregisterAgent: '${name}' kod-tanımlı çekirdek rosterdedir — silinemez, emeklilik için deprecated kullan.`)
+  }
+  delete AGENTS[name]
+  return true
+}
+
+/** Modül yüklendiği andaki kod-tanımlı roster — unregisterAgent'ın koruma seti. */
+const CORE_AGENT_NAMES: ReadonlySet<string> = new Set(Object.keys(AGENTS))

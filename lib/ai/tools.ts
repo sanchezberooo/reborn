@@ -209,6 +209,35 @@ export const TOOLS: AIToolDef[] = [
     },
   },
   {
+    name: 'delegate_task',
+    description:
+      'MAXAİ kuyruğuna bir iş emri (agent task) açar — run_agent\'ın AKSİNE beklemez: görev kuyruğa yazılır, worker uygun olduğunda ilgili departman ajanı çalıştırır. Hemen sonuç gerektirmeyen, zincirlenebilir veya başka işlere bağımlı işler için kullan. department veya agentName\'den en az biri zorunlu.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title:       { type: 'string', description: 'İş emrinin kısa başlığı' },
+        description: { type: 'string', description: 'İşin açıklaması (opsiyonel)' },
+        department:  {
+          type: 'string',
+          description: 'Hedef departman: knowledge | growth | creative | builder | client-success | operations',
+        },
+        agentName:   { type: 'string', description: 'Belirli bir ajan (opsiyonel — verilmezse departman uygun ajanı seçer)' },
+        priority:    { type: 'string', description: 'low | normal | high | urgent (varsayılan: normal)' },
+        input:       { type: 'object', description: 'Ajana geçecek girdi verileri (opsiyonel)' },
+        maxRetries:  { type: 'number', description: 'Hata halinde yeniden deneme hakkı (varsayılan: 0)' },
+        dependsOnTaskIds: {
+          type: 'array', items: { type: 'string' },
+          description: 'Bu iş emrinin beklediği task id\'leri — hepsi bitmeden çalışmaz (opsiyonel)',
+        },
+        dependsOnCurrentTask: {
+          type: 'boolean',
+          description: 'true → yeni iş emri, şu an üzerinde çalıştığın görev bitmeden çalışmaz (yalnız bir görev bağlamında anlamlı)',
+        },
+      },
+      required: ['title'],
+    },
+  },
+  {
     name: 'add_scholarship',
     description: "Burs başvurusu için bir üniversiteyi library ve scholarship modülüne ekler.",
     inputSchema: {
