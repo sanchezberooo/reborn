@@ -33,7 +33,11 @@ export function parseAgentOutput(finalText: string): unknown {
 export async function runAgent(
   agentName: string,
   input: Record<string, unknown>,
-  userId: string
+  userId: string,
+  /** opts.taskId: çalıştırma bir iş emri (agent task) adına yapılıyorsa o
+   *  görevin id'si — tool bağlamına taşınır (delegate_task'ın
+   *  dependsOnCurrentTask çözümü buna dayanır). Sprint 3, kırıcı değil. */
+  opts: { taskId?: string } = {}
 ): Promise<AgentRunResult> {
   const agent = getAgent(agentName)
   if (!agent) return { ok: false, error: `Agent '${agentName}' bulunamadı`, notFound: true }
@@ -117,7 +121,10 @@ export async function runAgent(
 
       const toolResults: AIToolResult[] = await Promise.all(
         turn.toolUses.map(async (tu) => {
-          const result = await serverExecuteTool(tu.name, tu.input, userId)
+          const result = await serverExecuteTool(tu.name, tu.input, userId, {
+            callerAgent: agentName,
+            taskId: opts.taskId,
+          })
           const resultStr = typeof result === 'string' ? result : JSON.stringify(result)
           void supabase.from('agent_logs').insert({
             run_id: runId,

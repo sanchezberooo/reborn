@@ -1,4 +1,5 @@
 import type { ColdNodeType, LinkType } from '@/lib/brain/types'
+import type { TaskPriority } from '@/lib/tasks/types'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -16,10 +17,21 @@ function clampNumber(value: unknown, fallback: number, min: number, max: number)
  *  dışında kalabilir — tek kullanıcılı fazda kabul edilmiş sınır. */
 const SIGNAL_SCAN_WINDOW = 100
 
+/** Tool çağrısının kaynağı — delegasyon izinin "kim açtı" alanı ve
+ *  dependsOnCurrentTask çözümü için (Sprint 3). Model girdisine GÜVENİLMEZ;
+ *  kimlik çağıran koddan (runner/Sanchez Core) gelir. */
+export interface ToolExecutionContext {
+  /** 'sanchez' veya registry ajan adı. */
+  callerAgent?: string
+  /** Çağıran bir iş emri (agent task) bağlamında koşuyorsa o görevin id'si. */
+  taskId?: string
+}
+
 export async function serverExecuteTool(
   name: string,
   input: Record<string, unknown>,
-  userId: string
+  userId: string,
+  ctx: ToolExecutionContext = {}
 ): Promise<unknown> {
   const { getSupabaseAdmin } = await import('@/lib/supabase-admin')
   const supabase = getSupabaseAdmin()
@@ -245,6 +257,93 @@ export async function serverExecuteTool(
       return await runAgent(agentName, agentInput, userId)
     }
 
+    // ── Task delegasyonu (Sprint 3) ───────────────────────────────────────
+    // run_agent'ın asenkron kardeşi: iş emri kuyruğa yazılır, worker uygun
+    // olduğunda çalıştırır. Doğrulamanın esas sahibi repository'dir
+    // (createTask departman/ajan/öncelik kontrolleri); burada yalnız tip
+    // ayıklama + bağlam çözümü yapılır. Beklenen hatalar { ok:false, error }
+    // olarak modele döner — çağıran run düşmez (brain_* deseni).
+    case 'delegate_task': {
+      const {
+        title, description, department, agentName, priority, maxRetries,
+        dependsOnTaskIds, dependsOnCurrentTask,
+      } = input as {
+        title?: unknown; description?: unknown; department?: unknown
+        agentName?: unknown; priority?: unknown; maxRetries?: unknown
+        dependsOnTaskIds?: unknown; dependsOnCurrentTask?: unknown
+      }
+      if (typeof title !== 'string' || !title.trim()) {
+        return { ok: false, error: 'delegate_task: title boş olmayan bir metin olmalı.' }
+      }
+      if (typeof department !== 'string' && typeof agentName !== 'string') {
+        return { ok: false, error: 'delegate_task: department veya agentName\'den en az biri verilmeli — yönlendirilemeyen iş emri açılamaz.' }
+      }
+
+      const { TASK_PRIORITIES } = await import('@/lib/tasks/types')
+      if (priority !== undefined
+        && (typeof priority !== 'string' || !(TASK_PRIORITIES as readonly string[]).includes(priority))) {
+        return { ok: false, error: `delegate_task: priority ${TASK_PRIORITIES.join(' | ')} olmalı — '${String(priority)}' reddedildi.` }
+      }
+
+      const dependsOn: string[] = []
+      if (Array.isArray(dependsOnTaskIds)) {
+        for (const id of dependsOnTaskIds) {
+          if (typeof id !== 'string' || !UUID_RE.test(id)) {
+            return { ok: false, error: `delegate_task: dependsOnTaskIds geçerli UUID listesi olmalı — '${String(id)}' reddedildi.` }
+          }
+          dependsOn.push(id)
+        }
+      }
+      if (dependsOnCurrentTask === true) {
+        if (!ctx.taskId) {
+          return { ok: false, error: 'delegate_task: dependsOnCurrentTask yalnız bir görev bağlamında çalışırken kullanılabilir — şu an aktif görev yok.' }
+        }
+        if (!dependsOn.includes(ctx.taskId)) dependsOn.push(ctx.taskId)
+      }
+
+      try {
+        const { createTask } = await import('@/lib/tasks/repository')
+        const task = await createTask(userId, {
+          title,
+          description: typeof description === 'string' ? description : undefined,
+          department: typeof department === 'string' ? department : undefined,
+          ownerAgent: typeof agentName === 'string' ? agentName : undefined,
+          priority: typeof priority === 'string' ? (priority as TaskPriority) : undefined,
+          input: (input.input as Record<string, unknown> | undefined) ?? undefined,
+          maxRetries: clampNumber(maxRetries, 0, 0, 5),
+          dependsOn,
+        })
+
+        // Organizma izi: Sanchez/insan iş emri = task_created; bir ajanın
+        // başka ajana açtığı iş = task_delegated (Sprint 3 olay sözlüğü).
+        const { getRuntime } = await import('@/lib/runtime/manager')
+        const delegatedByAgent = Boolean(ctx.callerAgent && ctx.callerAgent !== 'sanchez')
+        await getRuntime().bus.publish({
+          type: delegatedByAgent ? 'task_delegated' : 'task_created',
+          taskId: task.id,
+          agentName: task.ownerAgent ?? undefined,
+          department: task.department ?? undefined,
+          userId,
+          detail: {
+            title: task.title,
+            delegatedBy: ctx.callerAgent ?? 'insan',
+            ...(ctx.taskId ? { fromTaskId: ctx.taskId } : {}),
+            ...(dependsOn.length > 0 ? { dependsOn } : {}),
+          },
+        })
+
+        return {
+          ok: true,
+          taskId: task.id,
+          status: task.status,
+          department: task.department,
+          ownerAgent: task.ownerAgent,
+        }
+      } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : String(err) }
+      }
+    }
+
     // ── Agent Brain tool'ları ─────────────────────────────────────────────
     // Tanımlar lib/brain/tools.ts'te; davranış burada — brain katmanı
     // (query/node-repository/link-registry) DOĞRUDAN import edilir (diğer
@@ -285,7 +384,7 @@ export async function serverExecuteTool(
       if (typeof targetType !== 'string' || !(COLD_NODE_TYPES as readonly string[]).includes(targetType)) {
         return {
           ok: false,
-          error: `brain_integrate: targetType 7 tanımlı tipten biri olmalı (${COLD_NODE_TYPES.join(', ')}) — '${String(targetType)}' reddedildi.`,
+          error: `brain_integrate: targetType ${COLD_NODE_TYPES.length} tanımlı tipten biri olmalı (${COLD_NODE_TYPES.join(', ')}) — '${String(targetType)}' reddedildi.`,
         }
       }
       if (typeof content !== 'string' || !content.trim()) {
@@ -299,6 +398,18 @@ export async function serverExecuteTool(
         // sözleşmedeki derivedFromLinkId kenar sorgusuyla okunur.
         const neighbors = await getLinkedNodes(node.id, 'derived_from')
         const derived = neighbors.find((n) => n.direction === 'outgoing' && n.node.id === signalId)
+
+        // Organizma izi (Sprint 3): soğuk katmana her yazım brain_updated
+        // olayıdır — Live State ve gelecekteki Office akışı bunu görür.
+        const { getRuntime } = await import('@/lib/runtime/manager')
+        await getRuntime().bus.publish({
+          type: 'brain_updated',
+          agentName: ctx.callerAgent,
+          taskId: ctx.taskId,
+          userId,
+          detail: { nodeId: node.id, targetType, signalId },
+        })
+
         return { nodeId: node.id, derivedFromLinkId: derived?.link.id ?? null }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
