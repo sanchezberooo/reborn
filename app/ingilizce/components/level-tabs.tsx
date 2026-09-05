@@ -277,7 +277,7 @@ export function LevelTabsLayout({ moduleKey, content }: Props) {
         >
           <div style={{ fontSize: 32, marginBottom: 12 }}>🔒</div>
           <p style={{ color: '#ffffff', fontWeight: 600, marginBottom: 6 }}>B2 Seviyesi Kilitli</p>
-          <p style={{ color: '#a0a0a0', fontSize: 13 }}>Haziran 2026'da açılıyor.</p>
+          <p style={{ color: '#a0a0a0', fontSize: 13 }}>Haziran 2026&apos;da açılıyor.</p>
           <p style={{ color: '#555', fontSize: 12, marginTop: 6 }}>Önce A1, A2 ve B1 konularını tamamla.</p>
         </div>
       )}

@@ -567,7 +567,7 @@ export default function BursAkademiPage() {
               </button>
             </div>
           </div>
-          <p className="text-sm text-muted/50">ABD'de tam burs veren üniversiteler — uluslararası öğrenciler için</p>
+          <p className="text-sm text-muted/50">ABD&apos;de tam burs veren üniversiteler — uluslararası öğrenciler için</p>
         </div>
 
         {/* ── filter bar ── */}

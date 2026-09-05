@@ -96,7 +96,7 @@ function QuestionCard({ question, level, onAskSanchez }: {
           <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
           </svg>
-          Bu soruyu Sanchez'e sor
+          Bu soruyu Sanchez&apos;e sor
         </button>
       </div>
     </div>
@@ -142,7 +142,7 @@ export function SpeakingModule() {
       >
         <span style={{ fontSize: 16, flexShrink: 0 }}>💡</span>
         <p style={{ color: '#a0a0a0', fontSize: 12, lineHeight: 1.6 }}>
-          Her kartın altındaki <strong style={{ color: '#c8a96e' }}>Sanchez'e sor</strong> butonuna tıkla.
+          Her kartın altındaki <strong style={{ color: '#c8a96e' }}>Sanchez&apos;e sor</strong> butonuna tıkla.
           Sanchez sana o soruyu sorar, cevabını İngilizce yaz, o da gramerini düzeltir.
         </p>
       </div>
