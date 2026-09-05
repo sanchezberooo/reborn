@@ -1,5 +1,6 @@
 import type { ColdNodeType, LinkType } from '@/lib/brain/types'
 import type { TaskPriority } from '@/lib/tasks/types'
+import { auditInputKeys, writeAuditLog } from '@/lib/audit/log'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -27,11 +28,51 @@ export interface ToolExecutionContext {
   taskId?: string
 }
 
+/**
+ * Tool yürütmenin TEK GİRİŞ KAPISI. Sıra: yürüt → denetim kaydı.
+ * İmza DEĞİŞMEDİ — çağıranlar (lib/sanchez/core.ts, lib/agents/runner.ts)
+ * etkilenmez.
+ *
+ * Denetim yazımı tool'un başarı/hata sözleşmesini DEĞİŞTİRMEZ:
+ * writeAuditLog asla fırlatmaz (lib/audit/log.ts), hata aynen yukarı gider
+ * ve Sanchez Core onu yakalayıp modele isError olarak döndürür.
+ *
+ * capability/department kolonları burada BİLİNÇLİ boş: ikisi de izin
+ * kararının özellikleridir, kararı veren katman geldiğinde (runtime
+ * capability enforcement) dolar.
+ */
 export async function serverExecuteTool(
   name: string,
   input: Record<string, unknown>,
   userId: string,
   ctx: ToolExecutionContext = {}
+): Promise<unknown> {
+  const startedAt = Date.now()
+  const auditBase = {
+    userId,
+    agentName: ctx.callerAgent ?? null,
+    toolName: name,
+    inputKeys: auditInputKeys(input),
+  }
+
+  try {
+    const result = await runTool(name, input, userId, ctx)
+    await writeAuditLog({ ...auditBase, status: 'allowed', durationMs: Date.now() - startedAt })
+    return result
+  } catch (err) {
+    await writeAuditLog({ ...auditBase, status: 'error', durationMs: Date.now() - startedAt, error: err })
+    throw err
+  }
+}
+
+/** Tool gövdeleri. Davranış değişmedi; yalnız yukarıdaki sarmalayıcının
+ *  altına alındı ki denetim ve (sonraki adımda) yetki kontrolü tek yerde
+ *  yaşasın. */
+async function runTool(
+  name: string,
+  input: Record<string, unknown>,
+  userId: string,
+  ctx: ToolExecutionContext
 ): Promise<unknown> {
   const { getSupabaseAdmin } = await import('@/lib/supabase-admin')
   const supabase = getSupabaseAdmin()
