@@ -78,7 +78,17 @@ function toTurn(response: BetaMessage): AITurn {
     : response.stop_reason === 'max_tokens' ? 'max_tokens'
     : 'end_turn'
 
-  return { stopReason, text, toolUses, raw: response.content }
+  // usage: SDK her yanıtta döndürür. Streaming yolunda da doludur çünkü
+  // toTurn oradan da finalMessage() ile çağrılır — Anthropic akışın sonunda
+  // message_delta olayıyla nihai usage'ı gönderir ve SDK bunu birikmiş
+  // mesaja işler. Yani non-streaming/streaming ayrımı YOK.
+  // cache_creation/cache_read token'ları BİLİNÇLİ dışarıda: bugün prompt
+  // cache kullanılmıyor; girdiye eklemek maliyeti olduğundan farklı gösterir.
+  const usage = response.usage
+    ? { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens }
+    : undefined
+
+  return { stopReason, text, toolUses, raw: response.content, usage }
 }
 
 export class AnthropicProvider implements AIProvider {

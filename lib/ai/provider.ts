@@ -44,6 +44,12 @@ export interface AIToolUse {
   input: Record<string, unknown>
 }
 
+/** Tek bir model turunun token tüketimi. */
+export interface AIUsage {
+  inputTokens: number
+  outputTokens: number
+}
+
 export interface AITurn {
   stopReason: 'end_turn' | 'tool_use' | 'max_tokens'
   /** Bu turda üretilen düz metin (tüm text bloklarının birleşimi). */
@@ -52,6 +58,13 @@ export interface AITurn {
   toolUses: AIToolUse[]
   /** Provider'ın ham assistant içeriği — AIMessage.raw olarak geçmişe geri konur. */
   raw?: unknown
+  /**
+   * Bu turun token tüketimi — OPSİYONEL olması sözleşmenin parçasıdır:
+   * MockProvider ölçecek bir şey üretmez ve gelecekteki sağlayıcılar usage
+   * vermeyebilir. Eksikliği "bedavaydı" değil "BİLİNMİYOR" demektir; bu
+   * yüzden toplama yolunda 0 ile doldurulmaz (bkz. lib/agents/usage.ts).
+   */
+  usage?: AIUsage
 }
 
 // ─── Streaming olayları ─────────────────────────────────────────────────────

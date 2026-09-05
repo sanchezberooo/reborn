@@ -2,7 +2,7 @@ import type { AIProvider } from './provider'
 import { AnthropicProvider } from './anthropic'
 import { MockProvider } from './mock'
 
-export type { AIMessage, AIProvider, AIRequest, AIStreamEvent, AIToolDef, AIToolResult, AIToolUse, AITurn } from './provider'
+export type { AIMessage, AIProvider, AIRequest, AIStreamEvent, AIToolDef, AIToolResult, AIToolUse, AITurn, AIUsage } from './provider'
 export { CLAUDE_MODEL } from './anthropic'
 export { TOOLS, MAX_TOOL_ITERATIONS } from './tools'
 

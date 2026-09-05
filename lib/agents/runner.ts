@@ -1,5 +1,6 @@
 import { getAIProvider, TOOLS, MAX_TOOL_ITERATIONS } from '@/lib/ai'
-import type { AIMessage, AIToolResult } from '@/lib/ai'
+import type { AIMessage, AIToolResult, AIUsage } from '@/lib/ai'
+import { sumUsage } from '@/lib/ai/usage'
 import { getAgent } from '@/lib/agents/registry'
 import { runToolCall } from '@/lib/agents/tool-loop'
 import { verifyAgentOutput } from '@/lib/agents/verify'
@@ -68,6 +69,11 @@ export async function runAgent(
 
   const runId = runRow.id as string
 
+  // Token muhasebesi try'ın DIŞINDA: çalıştırma yarıda patlasa da o ana
+  // kadar harcanan token gerçekten harcanmıştır ve satıra yazılmalıdır —
+  // maliyeti yalnız başarılı run'larda görmek kontrol kaybıdır.
+  const turnUsages: (AIUsage | undefined)[] = []
+
   try {
     const provider = getAIProvider()
 
@@ -117,6 +123,9 @@ export async function runAgent(
       })
 
       finalText += turn.text
+      // Her tur sayılır — döngü nasıl biterse bitsin (break, iterasyon
+      // sınırı, hata) o ana kadar harcanan token gerçekten harcanmıştır.
+      turnUsages.push(turn.usage)
 
       if (turn.stopReason !== 'tool_use') break
 
@@ -172,10 +181,15 @@ export async function runAgent(
     // ── LOG + COMPLETE ────────────────────────────────────────────────────
     // Çıktı BAŞARISIZ doğrulamada da yazılır: verify_failed bir run'ın
     // incelenebilmesi tam da neyin üretildiğine bakmayı gerektirir.
+    const usage = sumUsage(turnUsages)
+
     await supabase.from('agent_runs').update({
       status: verification.passed ? 'done' : 'verify_failed',
       output,
       verification,
+      // null = ölçülmedi (MockProvider) — 0 ile karıştırılmaz.
+      input_tokens: usage.inputTokens,
+      output_tokens: usage.outputTokens,
       module_target: agent.moduleTarget,
       finished_at: new Date().toISOString(),
     }).eq('id', runId)
@@ -205,9 +219,12 @@ export async function runAgent(
 
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+    const usage = sumUsage(turnUsages)
     await supabase.from('agent_runs').update({
       status: 'error',
       error: message,
+      input_tokens: usage.inputTokens,
+      output_tokens: usage.outputTokens,
       finished_at: new Date().toISOString(),
     }).eq('id', runId)
     return { ok: false, error: message, runId }
