@@ -43,7 +43,9 @@ describe('LruCache', () => {
   })
 })
 
-describe('LocalEmbeddingProvider.embed (gerçek model)', () => {
+// CI'da model indirmeyi (~570 MB) önler: GitHub Actions CI=true set eder.
+// Lokalde (model zaten .cache/transformers'ta) normal çalışmaya devam eder.
+describe.skipIf(Boolean(process.env.CI))('LocalEmbeddingProvider.embed (gerçek model)', () => {
   const provider = new LocalEmbeddingProvider()
 
   beforeAll(async () => {
