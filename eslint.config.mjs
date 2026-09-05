@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Bu proje kodu değil: claude-flow boilerplate (git takibinde değil, ama
+    // diskte kalıyor) ve kişisel Obsidian kasası (repo dışına taşınmalı).
+    ".claude/**",
+    "reborn kasa/**",
   ]),
 ]);
 
