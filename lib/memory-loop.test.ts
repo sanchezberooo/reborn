@@ -82,6 +82,10 @@ describe.skipIf(!hasEnv)('hafıza döngüsü (MockProvider + canlı Supabase + b
       'save_memory',
       { content: SENTINEL, importance: 7, tags: ['test'], type: 'user_fact' },
       MEMORY_USER_ID,
+      // Çağıran Sanchez (lib/sanchez/core.ts deseni): kimliksiz çağrı runtime
+      // enforcement'ta reddedilirdi ve save_memory'nin yeteneği
+      // (life-data.write) hiçbir departmanda izinli değil — Sanchez tool'u.
+      { callerAgent: 'sanchez' },
     )) as { ok: boolean; memory_id: string; entity_synced: boolean }
 
     expect(result.ok).toBe(true)

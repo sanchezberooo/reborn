@@ -258,7 +258,15 @@ describe.skipIf(!hasEnv)('worker uçtan uca (MockProvider + canlı Supabase)', (
     expect(events?.map((e) => e.event)).toContain('task_delegated')
 
     // Geçersiz girdiler run'ı düşürmeden reddedilir.
-    const noRoute = (await serverExecuteTool('delegate_task', { title: 'yönsüz' }, RUNTIME_USER_ID)) as { ok: boolean }
+    // callerAgent yukarıdakiyle aynı: bu satır delegate_task'ın YÖNLENDİRME
+    // validasyonunu sınıyor, yetki kapısını değil — kimliksiz bırakılırsa
+    // enforcement çağrıyı validasyona hiç ulaşmadan reddederdi.
+    const noRoute = (await serverExecuteTool(
+      'delegate_task',
+      { title: 'yönsüz' },
+      RUNTIME_USER_ID,
+      { callerAgent: 'growth-agent' },
+    )) as { ok: boolean }
     expect(noRoute.ok).toBe(false)
 
     // İptal yolu (task_cancelled) + kuyruk hijyeni: bu iş emri sonraki

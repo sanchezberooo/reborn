@@ -32,6 +32,12 @@ const hasEnv = Boolean(
  *  setleriyle çakışmayan yeni sentinel. */
 const KNOWLEDGE_USER_ID = '00000000-0000-4000-a000-00000000000e'
 
+/** Çağıran kimliği — runtime capability enforcement (lib/departments/
+ *  enforcement.ts) kimliksiz çağrıyı default-deny ile reddeder. Üretimde
+ *  bu tool'ları çağıran ajan budur: brain.integrate/link/read/signals.read
+ *  yalnız knowledge departmanında izinli. */
+const KNOWLEDGE_CALLER = { callerAgent: 'knowledge-agent' } as const
+
 const SIGNAL_A_CONTENT =
   'Gümüş baykuş kütüphanesi gece istekleri sınıra takılıyor — benzersiz knowledge-agent test sinyali A.'
 const SIGNAL_B_CONTENT =
@@ -88,6 +94,7 @@ describe.skipIf(!hasEnv || !hasMigration)(
         'brain_integrate',
         { signalId: signalA.id, targetType: 'opinion', content: 'x' },
         KNOWLEDGE_USER_ID,
+        KNOWLEDGE_CALLER,
       )
       expect(result).toMatchObject({ ok: false })
       expect(String((result as { error: string }).error)).toMatch(/reddedildi/)
@@ -101,6 +108,7 @@ describe.skipIf(!hasEnv || !hasMigration)(
           'brain_integrate',
           { signalId: 'sinyal-1', targetType: 'fact', content: 'x' },
           KNOWLEDGE_USER_ID,
+          KNOWLEDGE_CALLER,
         ),
       ).toMatchObject({ ok: false })
       expect(
@@ -108,6 +116,7 @@ describe.skipIf(!hasEnv || !hasMigration)(
           'brain_integrate',
           { signalId: signalA.id, targetType: 'fact', content: '   ' },
           KNOWLEDGE_USER_ID,
+          KNOWLEDGE_CALLER,
         ),
       ).toMatchObject({ ok: false })
     })
@@ -117,6 +126,7 @@ describe.skipIf(!hasEnv || !hasMigration)(
         'brain_link',
         { fromId: signalA.id, toId: signalB.id, linkType: 'friend_of' },
         KNOWLEDGE_USER_ID,
+        KNOWLEDGE_CALLER,
       )
       expect(invalid).toMatchObject({ ok: false })
       expect(String((invalid as { error: string }).error)).toMatch(/reddedildi/)
@@ -125,6 +135,7 @@ describe.skipIf(!hasEnv || !hasMigration)(
         'brain_link',
         { fromId: signalA.id, toId: signalB.id, linkType: 'semantic' },
         KNOWLEDGE_USER_ID,
+        KNOWLEDGE_CALLER,
       )
       expect(semantic).toMatchObject({ ok: false })
     })
@@ -136,6 +147,7 @@ describe.skipIf(!hasEnv || !hasMigration)(
         'brain_read_signals',
         { limit: 999 }, // max 20'ye kırpılmalı — hata değil
         KNOWLEDGE_USER_ID,
+        KNOWLEDGE_CALLER,
       )) as BrainNode[]
 
       expect(Array.isArray(signals)).toBe(true)
@@ -202,6 +214,7 @@ describe.skipIf(!hasEnv || !hasMigration)(
         'brain_get_node',
         { id: signalA.id },
         KNOWLEDGE_USER_ID,
+        KNOWLEDGE_CALLER,
       )) as BrainNode
       expect(found.id).toBe(signalA.id)
 
@@ -210,6 +223,7 @@ describe.skipIf(!hasEnv || !hasMigration)(
           'brain_get_node',
           { id: '00000000-0000-4000-a000-0000000000aa' },
           KNOWLEDGE_USER_ID,
+          KNOWLEDGE_CALLER,
         ),
       ).toBeNull()
     })

@@ -245,6 +245,9 @@ describe.skipIf(!hasEnv || !hasMigration)(
             content: 'Rapor sonrası damıtılmış test bilgisi.',
           },
           REPORT_USER_ID,
+          // Kimliksiz çağrı runtime enforcement'ta default-deny ile
+          // reddedilir; brain.integrate yalnız knowledge departmanında izinli.
+          { callerAgent: 'knowledge-agent' },
         )) as { nodeId?: string; ok?: boolean; error?: string }
 
         expect(integrated.nodeId).toBeTruthy()

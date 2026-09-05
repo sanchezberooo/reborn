@@ -1,6 +1,7 @@
 import type { ColdNodeType, LinkType } from '@/lib/brain/types'
 import type { TaskPriority } from '@/lib/tasks/types'
 import { auditInputKeys, writeAuditLog } from '@/lib/audit/log'
+import { canUseTool } from '@/lib/departments/enforcement'
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -29,17 +30,13 @@ export interface ToolExecutionContext {
 }
 
 /**
- * Tool yürütmenin TEK GİRİŞ KAPISI. Sıra: yürüt → denetim kaydı.
- * İmza DEĞİŞMEDİ — çağıranlar (lib/sanchez/core.ts, lib/agents/runner.ts)
- * etkilenmez.
+ * Tool yürütmenin TEK GİRİŞ KAPISI. Sıra: yetki kontrolü → yürüt →
+ * denetim kaydı. İmza DEĞİŞMEDİ — çağıranlar (lib/sanchez/core.ts,
+ * lib/agents/runner.ts) etkilenmez.
  *
  * Denetim yazımı tool'un başarı/hata sözleşmesini DEĞİŞTİRMEZ:
  * writeAuditLog asla fırlatmaz (lib/audit/log.ts), hata aynen yukarı gider
  * ve Sanchez Core onu yakalayıp modele isError olarak döndürür.
- *
- * capability/department kolonları burada BİLİNÇLİ boş: ikisi de izin
- * kararının özellikleridir, kararı veren katman geldiğinde (runtime
- * capability enforcement) dolar.
  */
 export async function serverExecuteTool(
   name: string,
@@ -48,19 +45,47 @@ export async function serverExecuteTool(
   ctx: ToolExecutionContext = {}
 ): Promise<unknown> {
   const startedAt = Date.now()
+  // Karar SAF ve yürütmeden ayrı (lib/departments/enforcement.ts): girdiye
+  // değil yalnız çağıran kimliği + tool adına bakar.
+  const decision = canUseTool(ctx.callerAgent, name)
   const auditBase = {
     userId,
     agentName: ctx.callerAgent ?? null,
+    department: decision.department,
     toolName: name,
+    capability: decision.capability,
     inputKeys: auditInputKeys(input),
   }
 
+  if (!decision.allowed) {
+    // Default-deny: tool GÖVDESİ HİÇ ÇALIŞMAZ — reddedilen çağrı yan etki
+    // üretmez. Önce iz düşer (muaf ≠ izsiz, red ≠ sessiz), sonra hata.
+    await writeAuditLog({
+      ...auditBase,
+      status: 'denied',
+      denyReason: decision.reason,
+      durationMs: Date.now() - startedAt,
+    })
+    // DÜZ Error — mevcut hata sözleşmesinden geçer: Sanchez Core yakalar,
+    // modele isError olarak döner ve TURU DÜŞÜRMEZ. Turu düşüren yeni bir
+    // exception tipi icat edilmez. Metin güvenlidir (enforcement.ts
+    // denyMessage): izin tablosunu ve başka tool adlarını sızdırmaz.
+    throw new Error(decision.message)
+  }
+
+  // İzin verilen yolda denetim yazımı ATEŞLE-UNUT (mevcut agent_logs
+  // deseniyle aynı): burası kullanıcıya dönük sohbet sıcak yolu ve Sanchez
+  // bir turda 16 tool iterasyonuna kadar çıkabiliyor — her çağrıya bir DB
+  // gidiş-dönüşü eklemek gecikmeyi doğrudan kullanıcıya yansıtırdı.
+  // Red yolu (yukarıda) bilinçli olarak await'li: orada gecikme maliyeti
+  // yok (zaten hata fırlatılıyor) ve güvenlik kararının izi kaybolmamalı.
+  // writeAuditLog asla fırlatmaz → void güvenli, unhandled rejection olmaz.
   try {
     const result = await runTool(name, input, userId, ctx)
-    await writeAuditLog({ ...auditBase, status: 'allowed', durationMs: Date.now() - startedAt })
+    void writeAuditLog({ ...auditBase, status: 'allowed', durationMs: Date.now() - startedAt })
     return result
   } catch (err) {
-    await writeAuditLog({ ...auditBase, status: 'error', durationMs: Date.now() - startedAt, error: err })
+    void writeAuditLog({ ...auditBase, status: 'error', durationMs: Date.now() - startedAt, error: err })
     throw err
   }
 }

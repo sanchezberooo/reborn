@@ -154,6 +154,11 @@ describe.skipIf(!hasEnv || !goalsTableReady)('onboarding akışı (MockProvider 
       toolUse.name,
       toolUse.input,
       ONBOARDING_USER_ID,
+      // Route'un yaptığının aynısı (lib/sanchez/core.ts): çağıran Sanchez'dir.
+      // Kimliksiz çağrı runtime enforcement'ta reddedilirdi; ayrıca save_goal'ın
+      // yeteneği (life-data.write) hiçbir departmanda izinli değil — bu tool
+      // tasarım gereği yalnız Sanchez'indir.
+      { callerAgent: 'sanchez' },
     )) as { ok: boolean; goal_id: string; title: string; status: string }
     expect(result.ok).toBe(true)
     expect(result.title).toBe(ONBOARDING_GOAL_TITLE)
