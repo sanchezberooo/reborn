@@ -22,7 +22,7 @@ import type { AIMessage, AIToolResult, AITurn } from '../ai'
 import { buildSystemPrompt } from '../sanchez-prompt'
 import type { BeroProfile } from '../memory'
 import type { RetrievedContextItem } from '../sanchez-prompt'
-import { serverExecuteTool } from '../agents/executor'
+import { runToolCall } from '../agents/tool-loop'
 import type { SanchezEventSink, SanchezTurnRequest } from './types'
 
 interface ObservedState {
@@ -92,25 +92,18 @@ async function executeToolCalls(
 
   return Promise.all(
     turn.toolUses.map(async (tu) => {
-      try {
-        // callerAgent 'sanchez': delegasyon izinde "kim açtı" alanı — Sanchez
-        // iş emri açtığında olay task_created'dır, task_delegated değil.
-        const result = await serverExecuteTool(tu.name, tu.input, userId, { callerAgent: 'sanchez' })
-        const resultStr = typeof result === 'string' ? result : JSON.stringify(result)
+      // callerAgent 'sanchez': delegasyon izinde "kim açtı" alanı — Sanchez
+      // iş emri açtığında olay task_created'dır, task_delegated değil.
+      // Hata yakalama runToolCall'ın içinde (lib/agents/tool-loop.ts) —
+      // aynı sözleşme runner'da da kullanılır.
+      const result = await runToolCall(tu, userId, { callerAgent: 'sanchez' })
+      if (!result.isError) {
         void adminClient.from('agent_logs').insert({
-          agent_name: 'sanchez', action: tu.name, result: resultStr.slice(0, 500),
+          agent_name: 'sanchez', action: tu.name, result: result.content.slice(0, 500),
         })
-        send({ type: 'tool_end', name: tu.name, ok: true })
-        return { toolUseId: tu.id, content: resultStr }
-      } catch (err) {
-        console.error(`[Reborn] tool ${tu.name} error:`, err)
-        send({ type: 'tool_end', name: tu.name, ok: false })
-        return {
-          toolUseId: tu.id,
-          content: `Hata: ${err instanceof Error ? err.message : 'Tool çalışmadı'}`,
-          isError: true,
-        }
       }
+      send({ type: 'tool_end', name: tu.name, ok: !result.isError })
+      return result
     }),
   )
 }

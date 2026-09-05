@@ -569,6 +569,14 @@ async function runTool(
     }
 
     default:
-      return { ok: true, note: 'server-handled' }
+      // Tanımsız tool adı BAŞARI DEĞİLDİR. Eskiden burası
+      // { ok: true, note: 'server-handled' } dönüyordu ve model yazmadığı
+      // bir kaydı yazılmış sanıyordu. Enforcement (Paket A) tanımsız adı
+      // zaten 'unmapped-tool' ile reddediyor; bu dal artık yalnız Sanchez
+      // muafiyetiyle ulaşılabilir — yani tam olarak sessiz kalmaması
+      // gereken yerde. Düz Error: serverExecuteTool'un catch'inden geçip
+      // audit'e status='error' düşer, oradan runToolCall'a ve modele
+      // isError olarak döner; turu/run'ı DÜŞÜRMEZ.
+      throw new Error(`Tool '${name}' sunucuda tanımlı değil — çağrı yürütülmedi.`)
   }
 }

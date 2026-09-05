@@ -1,7 +1,7 @@
 import { getAIProvider, TOOLS, MAX_TOOL_ITERATIONS } from '@/lib/ai'
 import type { AIMessage, AIToolResult } from '@/lib/ai'
 import { getAgent } from '@/lib/agents/registry'
-import { serverExecuteTool } from '@/lib/agents/executor'
+import { runToolCall } from '@/lib/agents/tool-loop'
 
 export type AgentRunResult =
   | { ok: true; output: unknown; runId: string }
@@ -119,20 +119,24 @@ export async function runAgent(
 
       messages.push({ role: 'assistant', content: turn.text, raw: turn.raw })
 
+      // Hata çağrı BAŞINA yakalanır (lib/agents/tool-loop.ts — Sanchez Core
+      // ile aynı sözleşme): tek bir reddedilen/patlayan tool run'ı
+      // düşürmez, modele isError olarak döner ve ajan devam edebilir.
       const toolResults: AIToolResult[] = await Promise.all(
         turn.toolUses.map(async (tu) => {
-          const result = await serverExecuteTool(tu.name, tu.input, userId, {
+          const result = await runToolCall(tu, userId, {
             callerAgent: agentName,
             taskId: opts.taskId,
           })
-          const resultStr = typeof result === 'string' ? result : JSON.stringify(result)
-          void supabase.from('agent_logs').insert({
-            run_id: runId,
-            agent_name: agentName,
-            action: tu.name,
-            result: resultStr.slice(0, 500),
-          })
-          return { toolUseId: tu.id, content: resultStr }
+          if (!result.isError) {
+            void supabase.from('agent_logs').insert({
+              run_id: runId,
+              agent_name: agentName,
+              action: tu.name,
+              result: result.content.slice(0, 500),
+            })
+          }
+          return result
         })
       )
 
