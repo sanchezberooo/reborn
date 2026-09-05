@@ -148,11 +148,14 @@ describe('denetim yazımı tool sonucunu değiştirmez', () => {
     vi.resetModules()
   })
 
-  it('yazıcı sözleşmesini bozup FIRLATSA bile tool sonucu aynı kalır', async () => {
+  it('yazıcı sözleşmesini bozup FIRLATSA bile güvenlik sonucu aynı kalır', async () => {
     // Yazıcının kendi sözleşmesi "asla fırlatma"; burada o sözleşme
-    // BİLEREK bozulup executor'ın ikinci savunma hattı (safeAudit)
-    // sınanıyor. Tool gövdesi DB gerektirmesin diye eşlenmemiş bir ad
-    // yerine, Sanchez muafiyetiyle default dalına düşen bir çağrı seçildi.
+    // BİLEREK bozulup executor'ın ikinci savunma hattı (safeAudit) sınanıyor.
+    //
+    // RED yolu seçildi (izinli yol değil): red kararı runTool'a hiç
+    // ulaşmadan döndüğü için DB'ye dokunulmaz — test CI'da da koşar. Ve
+    // sınadığı şey daha güçlü: denetim yazımı çökse bile çağrı yine de
+    // REDDEDİLİYOR, yazıcı hatası güvenlik kararının yerine geçmiyor.
     vi.resetModules()
     vi.doMock('@/lib/audit/log', async (importOriginal) => {
       const actual = await importOriginal<typeof import('./log')>()
@@ -164,11 +167,13 @@ describe('denetim yazımı tool sonucunu değiştirmez', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
       const { serverExecuteTool } = await import('../agents/executor')
-      const result = await serverExecuteTool(
-        'server-handled-olmayan-tool', {}, AUDIT_USER_ID, { callerAgent: 'sanchez' },
-      )
-      // Tool'un normal sonucu değişmedi:
-      expect(result).toEqual({ ok: true, note: 'server-handled' })
+      // growth-agent'ın life-data.write yetkisi yok → reddedilmeli.
+      await expect(
+        serverExecuteTool('save_memory', { content: 'x' }, AUDIT_USER_ID, {
+          callerAgent: 'growth-agent',
+        }),
+      ).rejects.toThrow(/reddedildi/) // yazıcı hatası DEĞİL, red mesajı
+
       // ...ve bu, hatanın yutulduğu için oldu: safeAudit'in catch'i koştu.
       expect(errorSpy).toHaveBeenCalledWith(
         '[Reborn audit] yazıcı sözleşmesi bozuldu:',
