@@ -18,15 +18,12 @@ jobs:
           node-version: 20
           cache: npm
 
-      # npm ci: lockfile'a BİREBİR sadık kurulum — reprodüksiyon garantisi
-      # buna bağlı (npm install lockfile'ı sessizce tamamlayabilir).
-      # Eskiden npm install kullanılıyordu çünkü Windows'ta üretilen lock
-      # dosyasında Linux'a özgü optional dependency'ler (@emnapi/* ve
-      # @tailwindcss/oxide-wasm32-wasi'nin WASM fallback'i) eksikti; lockfile
-      # `npm install --package-lock-only --os=linux --cpu=x64` ile bir kez
-      # yeniden üretildi ve o 6 girdi eklendi. Hiçbir paketin sürümü,
-      # resolved adresi veya integrity'si değişmedi.
-      - run: npm ci
+      # npm ci reddediyor: package-lock.json'daki bazı optional dependency
+      # girdileri (@emnapi/* — bge-m3'ün ONNX runtime'ının Linux'a özgü WASM
+      # fallback'i) yalnızca Linux'ta gerekiyor ve Windows'ta üretilen lock
+      # dosyasında eksik. npm install lockfile'ı gerektiği gibi tamamlar;
+      # hiçbir dependency versiyonu veya uygulama kodu değişmiyor.
+      - run: npm install
 
       - run: npm test
 
