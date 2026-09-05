@@ -205,9 +205,14 @@ function parseKnowledgeReportInput(req: AIRequest): { sourceUrl: string } | null
 // mock.ts → lib/agents bağımlılığı YENİ DEĞİL: KNOWLEDGE_AGENT_MARKER zaten
 // oradan geliyor.
 
+// startsWith, eşitlik DEĞİL: runner persona'nın SONUNA çıktı sözleşmesi bloğu
+// ekliyor (lib/agents/output-contract.ts), dolayısıyla system artık
+// persona'nın kendisi değil onunla BAŞLAYAN bir metindir. Eşitlik araması
+// buradaki çözümü sessizce öldürür ve şemalı her ajanın mock koşusu jenerik
+// fixture'a düşerdi (yani verify_failed).
 function resolveOutputSchema(req: AIRequest) {
   for (const agent of Object.values(AGENTS)) {
-    if (agent.persona === req.system) return agent.outputSchema
+    if (req.system.startsWith(agent.persona)) return agent.outputSchema
   }
   return undefined
 }

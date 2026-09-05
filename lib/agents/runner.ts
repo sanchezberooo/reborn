@@ -88,6 +88,9 @@ export async function runAgent(
     // rapor sinyallerle ilgilenmez, listenin varlığı modu bulandırır — sinyal
     // işleme yolu (mode'suz input) birebir aynı kalır.
     let system = agent.persona
+    // ownsPrompt: ajanın promptunu kendi kurucusu üretiyor mu. Öyleyse çıktı
+    // sözleşmesi de ONA aittir — aşağıdaki genel blok eklenmez (bkz. not).
+    let ownsPrompt = false
     if (agentName === 'knowledge-agent') {
       const { buildKnowledgeAgentContext } = await import('@/lib/brain/context-builder')
       const { buildKnowledgeAgentPrompt } = await import('@/lib/agents/knowledge-agent-prompt')
@@ -95,6 +98,30 @@ export async function runAgent(
       system = buildKnowledgeAgentPrompt(
         isReportMode ? '' : await buildKnowledgeAgentContext(10, { userId })
       )
+      ownsPrompt = true
+    }
+
+    // ── Çıktı sözleşmesi system prompt'a eklenir ──────────────────────────
+    // outputContract bugüne kadar modele HİÇ ULAŞMIYORDU: system olarak yalnız
+    // persona geçiyordu. Gerçek-AI smoke testinde ajanlar geçerli JSON üretip
+    // alan adlarını kendileri uydurdu ve schema-validity'den düştü. Blok TEK
+    // YERDE, TÜM ajanlar için eklenir — persona'lar elle düzenlenmedi.
+    //
+    // ÇİFTE TALİMAT RİSKİ İNCELENDİ: persona'sında zaten alan adı geçen 7 ajan
+    // için blok tekrar ama TUTARLIDIR (adlar zaten sözleşmeden geliyor); 6
+    // ajanda ise persona sözleşmenin yalnız bir kısmını adlandırıyordu —
+    // ingilizce-genel-plan ve ingilizce-planlayici ise "outputContract
+    // şemasına BİREBİR uy" diyerek görmedikleri bir şeye atıf yapıyordu.
+    // Yani blok çelişki yaratmıyor, var olan boşluğu kapatıyor.
+    //
+    // knowledge-agent İSTİSNA (ownsPrompt): sözleşmesi yalnız sinyal işleme
+    // modunu tanımlar, rapor modunun zarfı ({ mode, sourceUrl, report })
+    // farklıdır ve prompt kurucusu ikisini de zaten anlatır. Genel bloğu
+    // eklemek rapor modunda modele YANLIŞ şekli dayatırdı — çifte talimatın
+    // gerçekten zararlı olacağı tek yer burasıdır.
+    if (!ownsPrompt) {
+      const { buildOutputContractBlock } = await import('@/lib/agents/output-contract')
+      system += buildOutputContractBlock(agent)
     }
 
     const messages: AIMessage[] = [
