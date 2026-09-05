@@ -35,7 +35,12 @@ export class AgentRunExecutor implements TaskExecutor {
 
     const result = await runAgent(agentName, input, userId, { taskId: task.id })
     if (!result.ok) {
-      return { ok: false, error: result.error }
+      // Başarısız çalıştırmanın izi de göreve iliştirilir (VERIFY sonrası,
+      // Paket B): verify_failed bir run'ın incelenmesi çıktısına bakmayı
+      // gerektirir ve görevden run'a giden tek köprü bu olaydır. runId
+      // yoksa (ajan bulunamadı / run satırı hiç açılamadı) atlanır.
+      if (result.runId) await linkRun(task.id, result.runId)
+      return { ok: false, error: result.error, runId: result.runId }
     }
 
     await linkRun(task.id, result.runId)

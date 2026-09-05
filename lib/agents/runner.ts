@@ -2,10 +2,15 @@ import { getAIProvider, TOOLS, MAX_TOOL_ITERATIONS } from '@/lib/ai'
 import type { AIMessage, AIToolResult } from '@/lib/ai'
 import { getAgent } from '@/lib/agents/registry'
 import { runToolCall } from '@/lib/agents/tool-loop'
+import { verifyAgentOutput } from '@/lib/agents/verify'
+import type { FailedToolCall, VerificationResult } from '@/lib/agents/verify'
 
 export type AgentRunResult =
   | { ok: true; output: unknown; runId: string }
-  | { ok: false; error: string; notFound?: true }
+  /** verification: yalnız VERIFY düştüğünde dolu — çağıran (ve model)
+   *  hangi kontrolün neden düştüğünü görebilsin. runId: verify_failed
+   *  çalıştırmasının izi; run satırı yazıldıysa her hata yolunda taşınır. */
+  | { ok: false; error: string; notFound?: true; runId?: string; verification?: VerificationResult }
 
 /**
  * Ajanların JSON-only çıktı sözleşmesini ayıklar: kod bloklu (```json ... ```)
@@ -92,6 +97,10 @@ export async function runAgent(
 
     let finalText = ''
 
+    // VERIFY'ın 4. kontrolü için: bu run'da hata dönen tool çağrıları.
+    // Bloklamaz (bkz. verify.ts) — sonuçta görünür.
+    const failedToolCalls: FailedToolCall[] = []
+
     // Kaçak döngü guard'ı (chat route'uyla AYNI sabit): sınır aşılırsa hata
     // fırlatılmaz — eldeki metinle çıkılır, parseAgentOutput normal yolunda
     // (gerekirse parseError fallback'iyle) devam eder.
@@ -128,7 +137,9 @@ export async function runAgent(
             callerAgent: agentName,
             taskId: opts.taskId,
           })
-          if (!result.isError) {
+          if (result.isError) {
+            failedToolCalls.push({ name: tu.name, message: result.content })
+          } else {
             void supabase.from('agent_logs').insert({
               run_id: runId,
               agent_name: agentName,
@@ -149,12 +160,46 @@ export async function runAgent(
 
     const output = parseAgentOutput(finalText)
 
-    await supabase.from('agent_runs').update({
-      status: 'done',
+    // ── VERIFY ────────────────────────────────────────────────────────────
+    // Ajan artık kendi çıktısını otomatik başarılı saymaz. Karar SAF ve
+    // deterministiktir (lib/agents/verify.ts): ikinci bir LLM turu yok.
+    const verification = verifyAgentOutput({
       output,
+      outputSchema: agent.outputSchema,
+      failedToolCalls,
+    })
+
+    // ── LOG + COMPLETE ────────────────────────────────────────────────────
+    // Çıktı BAŞARISIZ doğrulamada da yazılır: verify_failed bir run'ın
+    // incelenebilmesi tam da neyin üretildiğine bakmayı gerektirir.
+    await supabase.from('agent_runs').update({
+      status: verification.passed ? 'done' : 'verify_failed',
+      output,
+      verification,
       module_target: agent.moduleTarget,
       finished_at: new Date().toISOString(),
     }).eq('id', runId)
+
+    if (!verification.passed) {
+      const failed = verification.checks
+        .filter((c) => c.blocking && !c.skipped && !c.passed)
+        .map((c) => `${c.name}${c.detail ? ` (${c.detail})` : ''}`)
+        .join('; ')
+      // ok:false BİLİNÇLİ — ok:true dönmek, sözleşmesini tutmayan çıktıyı
+      // kuyruk tarafında 'done' yapar ve bozuk veriyi aşağı akıtırdı; bu tam
+      // olarak TASK B1.2'de kapatılan "model başarı sanıyor" hatasının run
+      // düzeyindeki hâli olurdu. Kuyruk bunu 'failed' görür ve retry'a
+      // UYGUN sayar (terminal değil): baskın verify hatası parseError'dır —
+      // LLM belirsizliğinden doğar ve yeniden çalıştırmayla düzelebilir.
+      // Maliyet sınırı zaten görevde: maxRetries varsayılanı 0'dır
+      // (delegate_task clamp'i), yani retry görev başına açık bir tercihtir.
+      return {
+        ok: false,
+        error: `VERIFY başarısız: ${failed}`,
+        runId,
+        verification,
+      }
+    }
 
     return { ok: true, output, runId }
 
@@ -165,6 +210,6 @@ export async function runAgent(
       error: message,
       finished_at: new Date().toISOString(),
     }).eq('id', runId)
-    return { ok: false, error: message }
+    return { ok: false, error: message, runId }
   }
 }

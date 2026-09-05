@@ -333,6 +333,17 @@ Dil: eleştiriler Türkçe, taslaktan alıntılar orijinal dilinde (İngilizce).
       skipped: [{ signalId: 'string', reason: 'string' }],
       summary: 'string',
     }),
+    // VERIFY şeması (lib/agents/verify.ts) — İKİ ALTERNATİF ŞEKİL, çünkü bu
+    // ajanın iki modu vardır (yukarıdaki nota bkz.) ve çıktı zarfları
+    // birbirinden tamamen ayrıdır. Sinyal işleme modu önce; rapor modu
+    // ikinci. Roster'da şema beyan eden TEK ajan budur: diğer ajanların
+    // çıktı şekli sabit olsa da MockProvider onlara jenerik fixture döndürür
+    // (lib/ai/mock.ts), dolayısıyla şema beyanı mock koşusunu verify_failed
+    // yapardı — sözleşme değil altyapı sınırı.
+    outputSchema: [
+      { processed: 'array', skipped: 'array', summary: 'string' },
+      { mode: 'string', sourceUrl: 'string', report: 'string' },
+    ],
     persona: buildKnowledgeAgentPrompt(),
   },
 
