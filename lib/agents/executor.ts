@@ -60,7 +60,7 @@ export async function serverExecuteTool(
   if (!decision.allowed) {
     // Default-deny: tool GÖVDESİ HİÇ ÇALIŞMAZ — reddedilen çağrı yan etki
     // üretmez. Önce iz düşer (muaf ≠ izsiz, red ≠ sessiz), sonra hata.
-    await writeAuditLog({
+    await safeAudit({
       ...auditBase,
       status: 'denied',
       denyReason: decision.reason,
@@ -79,15 +79,24 @@ export async function serverExecuteTool(
   // gidiş-dönüşü eklemek gecikmeyi doğrudan kullanıcıya yansıtırdı.
   // Red yolu (yukarıda) bilinçli olarak await'li: orada gecikme maliyeti
   // yok (zaten hata fırlatılıyor) ve güvenlik kararının izi kaybolmamalı.
-  // writeAuditLog asla fırlatmaz → void güvenli, unhandled rejection olmaz.
   try {
     const result = await runTool(name, input, userId, ctx)
-    void writeAuditLog({ ...auditBase, status: 'allowed', durationMs: Date.now() - startedAt })
+    void safeAudit({ ...auditBase, status: 'allowed', durationMs: Date.now() - startedAt })
     return result
   } catch (err) {
-    void writeAuditLog({ ...auditBase, status: 'error', durationMs: Date.now() - startedAt, error: err })
+    void safeAudit({ ...auditBase, status: 'error', durationMs: Date.now() - startedAt, error: err })
     throw err
   }
+}
+
+/** Denetim yazımı tool sonucunu HİÇBİR koşulda değiştirmez. writeAuditLog
+ *  sözleşmesi zaten fırlatmamaktır (lib/audit/log.ts kendi try/catch'i);
+ *  buradaki catch ikinci savunma hattıdır — o sözleşme ileride bozulursa
+ *  güvenlik kapısı ve tool yolu birlikte düşmesin. */
+function safeAudit(entry: Parameters<typeof writeAuditLog>[0]): Promise<void> {
+  return writeAuditLog(entry).catch((err) => {
+    console.error('[Reborn audit] yazıcı sözleşmesi bozuldu:', err)
+  })
 }
 
 /** Tool gövdeleri. Davranış değişmedi; yalnız yukarıdaki sarmalayıcının
