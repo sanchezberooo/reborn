@@ -7,6 +7,8 @@ import type {
 } from './provider'
 import { ONBOARDING_MARKER } from '../sanchez-prompt'
 import { KNOWLEDGE_AGENT_MARKER } from '../agents/knowledge-agent-prompt'
+import { AGENTS } from '../agents/registry'
+import { buildSchemaFixture } from './schema-fixture'
 
 // MockProvider v1 — deterministik senaryo fixture'ları. API key'siz ve bakiyesiz
 // geliştirme/test için: streaming, tool durum göstergeleri, hata toleransı ve
@@ -184,6 +186,32 @@ function parseKnowledgeReportInput(req: AIRequest): { sourceUrl: string } | null
   return null
 }
 
+// ─── Sözleşme farkındalığı (Paket C1) ───────────────────────────────────────
+//
+// AIRequest'e ajan kimliği EKLENMEZ — provider tek bir model turunu soyutlar
+// ve kimin çağırdığını bilmemelidir. Şema bunun yerine system prompt'tan
+// GERİYE ÇÖZÜLÜR: lib/agents/runner.ts ajanın persona'sını system olarak
+// AYNEN geçirir, dolayısıyla persona ajanın kimliğidir.
+//
+// TEK İSTİSNA knowledge-agent'tır: runner onun promptunu çalıştırma anında
+// yeniden kurar (sinyal bağlamı) — bu yüzden persona eşleşmez. Ama o ajanın
+// zaten kendi marker'lı fixture yolu var ve buradan ÖNCE çalışır; iki modlu
+// union şeması bu değişiklikten hiç etkilenmez.
+//
+// Eşleşme bulunamazsa (Sanchez sohbeti, özet, persona'sı değiştirilmiş ajan)
+// jenerik fixture'a düşülür — yani bu mekanizma yalnız EKLER, mevcut hiçbir
+// davranışı geri almaz.
+//
+// mock.ts → lib/agents bağımlılığı YENİ DEĞİL: KNOWLEDGE_AGENT_MARKER zaten
+// oradan geliyor.
+
+function resolveOutputSchema(req: AIRequest) {
+  for (const agent of Object.values(AGENTS)) {
+    if (agent.persona === req.system) return agent.outputSchema
+  }
+  return undefined
+}
+
 // ─── Provider ───────────────────────────────────────────────────────────────
 
 export class MockProvider implements AIProvider {
@@ -205,12 +233,17 @@ export class MockProvider implements AIProvider {
     if (pickScenario(req) === 'error') {
       throw new Error('MockProvider: hata senaryosu tetiklendi (mesajda "hata" geçiyor).')
     }
-    // Ajanlar JSON-only çıktı sözleşmesiyle çalışır (lib/agents/runner.ts parser'ı)
-    const output = JSON.stringify({
-      mock: true,
-      note: 'MockProvider çıktısı — gerçek ajan davranışı AI Aktivasyon fazında bağlanır.',
-      input: lastUserText(req).slice(0, 200),
-    })
+    // Ajanlar JSON-only çıktı sözleşmesiyle çalışır (lib/agents/runner.ts parser'ı).
+    // Ajan şema beyan etmişse fixture ONDAN türetilir — böylece mock koşusu da
+    // ajanın kendi sözleşmesini tutar ve VERIFY'ı geçer (Paket C1 / C1.1).
+    const schema = resolveOutputSchema(req)
+    const output = JSON.stringify(schema
+      ? buildSchemaFixture(schema)
+      : {
+        mock: true,
+        note: 'MockProvider çıktısı — gerçek ajan davranışı AI Aktivasyon fazında bağlanır.',
+        input: lastUserText(req).slice(0, 200),
+      })
     return { stopReason: 'end_turn', text: output, toolUses: [] }
   }
 

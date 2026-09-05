@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 // VERIFY aşaması testi (Paket B / TASK B2 + B5).
 //
@@ -199,27 +199,48 @@ describe.skipIf(!hasEnv)('runAgent → agent_runs.verification (canlı Supabase)
   }, 60_000)
 
   it('düşen doğrulama: status verify_failed + runAgent ok:false + gerekçe', async () => {
-    // knowledge-agent'ın şeması iki alternatif şekil bekler; input'a
-    // mode:'report' verilmeden sinyal yolu koşar ve bekleyen sinyal yoksa
-    // MockProvider sözleşmeye UYAN çıktı üretir — bu yüzden şemayı düşürmek
-    // için ajanın kendisini değil, çıktının şeklini bozacak bir yol gerekir.
-    // En dürüst kırılma: registry'ye ŞEMALI geçici bir ajan kaydetmek.
-    const { registerAgent, unregisterAgent } = await import('./registry')
-    const { runAgent } = await import('./runner')
+    // NOT (Paket C1): bu test eskiden şemalı geçici bir ajan kaydedip
+    // MockProvider'ın jenerik fixture'ıyla şemayı düşürüyordu. C1.1'den
+    // sonra mock fixture'ı ŞEMADAN türetiliyor, yani mock artık her şemayı
+    // sağlıyor — o kırılma yolu kapandı (istenen davranış budur). Şemayı
+    // düşürmek için sağlayıcı sözleşmeye UYMAYAN çıktı döndürecek şekilde
+    // değiştirilir; sınanan şey aynı kalır: şema ihlali → verify_failed.
+    // SIRA ÖNEMLİ: resetModules registry'yi de tazeler, bu yüzden geçici ajan
+    // reset'ten SONRA ve runner'ın göreceği AYNI modül örneğine kaydedilir.
+    vi.resetModules()
+    vi.doMock('@/lib/ai', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('@/lib/ai')>()
+      return {
+        ...actual,
+        getAIProvider: () => ({
+          name: 'sozlesme-disi',
+          capabilities: {},
+          // 'zorunluAlan' YOK → schema-validity düşer.
+          complete: async () => ({
+            stopReason: 'end_turn' as const,
+            text: '{"baskaBirAlan":"sözleşmeye uymuyor"}',
+            toolUses: [],
+          }),
+          stream: actual.getAIProvider().stream,
+          embed: async () => [],
+        }),
+      }
+    })
 
+    const { registerAgent, unregisterAgent } = await import('./registry')
     registerAgent({
       name: 'verify-probe-agent',
       displayName: 'Verify Probe',
       department: 'operations',
-      persona: 'Test ajanı — MockProvider jenerik JSON fixture\'ı döndürür.',
+      persona: 'Test ajanı — sağlayıcı sözleşmeye uymayan çıktı döndürür.',
       toolNames: [],
       moduleTarget: null,
       outputContract: '{ "zorunluAlan": string }',
-      // MockProvider { mock, note, input } döndürür → bu şema TUTMAZ.
       outputSchema: { zorunluAlan: 'string' },
     })
 
     try {
+      const { runAgent } = await import('./runner')
       const result = await runAgent('verify-probe-agent', { probe: true }, VERIFY_USER_ID)
 
       expect(result.ok).toBe(false)
@@ -235,10 +256,12 @@ describe.skipIf(!hasEnv)('runAgent → agent_runs.verification (canlı Supabase)
 
       expect(data?.status).toBe('verify_failed')
       // Çıktı BAŞARISIZ doğrulamada da yazılır — inceleme onu görmeyi gerektirir.
-      expect(data?.output).toMatchObject({ mock: true })
+      expect(data?.output).toMatchObject({ baskaBirAlan: 'sözleşmeye uymuyor' })
       expect(data?.verification).toMatchObject({ passed: false })
     } finally {
       unregisterAgent('verify-probe-agent')
+      vi.doUnmock('@/lib/ai')
+      vi.resetModules()
     }
   }, 60_000)
 })
