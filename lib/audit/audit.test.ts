@@ -12,6 +12,11 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 // testler env-guard'lıdır (lib/goals-sync.test.ts deseni).
 
 process.env.AI_PROVIDER = 'mock'
+// Yazıcı test koşusunda VARSAYILAN OLARAK KAPALIDIR (bkz. lib/audit/log.ts
+// auditDisabled): canlı denetim tablosunu kirletmesin. Burası yazıcının
+// KENDİSİNİ sınıyor — bu dosya için açılır. Vitest 4 dosya başına fork
+// açtığından bayrak komşu test dosyalarına sızmaz.
+process.env.REBORN_AUDIT_IN_TESTS = '1'
 
 import { auditInputKeys, writeAuditLog } from './log'
 

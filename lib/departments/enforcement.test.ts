@@ -11,6 +11,9 @@ import { afterAll, describe, expect, it, vi } from 'vitest'
 //    tool gövdesini HİÇ çalıştırmadığı ve audit satırının düştüğü.
 
 process.env.AI_PROVIDER = 'mock'
+// Denetim yazıcısı test koşusunda varsayılan kapalı (lib/audit/log.ts);
+// bu dosyanın 2. katmanı tam da audit satırının düştüğünü sınıyor — açılır.
+process.env.REBORN_AUDIT_IN_TESTS = '1'
 
 import { AGENTS, listAgents } from '../agents/registry'
 import { canUseTool, ENFORCEMENT_EXEMPT_AGENT } from './enforcement'

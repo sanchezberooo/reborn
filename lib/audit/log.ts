@@ -34,6 +34,36 @@ export interface AuditEntry {
  *  satırı teşhis için yeterli olmalı, log deposunu şişirmemeli. */
 const MAX_ERROR_LENGTH = 500
 
+/**
+ * Denetim yazıcısını test koşusunda AÇAN bayrak. Bir test dosyası
+ * yazıcının kendisini sınıyorsa (lib/audit/audit.test.ts,
+ * lib/departments/enforcement.test.ts) en üstte
+ * `process.env[AUDIT_IN_TESTS_ENV] = '1'` yapar — `AI_PROVIDER = 'mock'`
+ * ile aynı desen. Vitest 4 her test dosyasını ayrı fork'ta koştuğu için
+ * bayrak dosya-yereldir, komşu dosyalara sızmaz.
+ */
+export const AUDIT_IN_TESTS_ENV = 'REBORN_AUDIT_IN_TESTS'
+
+/**
+ * Test koşusu canlı denetim tablosunu KİRLETMEZ.
+ *
+ * NEDEN KAPATMAK, "testler kendi satırlarını silsin" DEĞİL: izin verilen
+ * yolda denetim yazımı bilinçli olarak ateşle-unut'tur
+ * (lib/agents/executor.ts) — insert, testin afterAll temizliğinden SONRA
+ * düşebilir. Yani temizlik tabanlı çözüm yarış koşulludur ve satırları
+ * ara ara yine de bırakır. Kapatma deterministiktir.
+ *
+ * Sızdıran testler audit'i sınayanlar değil (onlar zaten temizliyor);
+ * altlarından geçen canlı testler: memory-loop, knowledge-agent,
+ * report-mode, onboarding-flow, runtime, roster.
+ *
+ * ÜRETİM DAVRANIŞI DEĞİŞMEZ: process.env.VITEST yalnız Vitest koşusunda
+ * tanımlıdır — `next build`, `next start` ve dev sunucusunda yoktur.
+ */
+function auditDisabled(): boolean {
+  return Boolean(process.env.VITEST) && process.env[AUDIT_IN_TESTS_ENV] !== '1'
+}
+
 /** Anahtar sayısı sınırı: modelden gelen girdi keyfi büyük olabilir. */
 const MAX_INPUT_KEYS = 50
 
@@ -66,6 +96,8 @@ function toErrorText(error: unknown): string | null {
  * günü için yer tutucudur, dolduran yol henüz yok.
  */
 export async function writeAuditLog(entry: AuditEntry): Promise<void> {
+  if (auditDisabled()) return
+
   try {
     const { getSupabaseAdmin } = await import('@/lib/supabase-admin')
     const supabase = getSupabaseAdmin()
