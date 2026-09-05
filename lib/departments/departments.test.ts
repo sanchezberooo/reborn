@@ -127,3 +127,57 @@ describe('dinamik registry — registerAgent / listAgents / unregisterAgent', ()
     }
   })
 })
+
+// ── life-data.write izin boşluğu (Paket C1 / TASK C1.4) ─────────────────────
+
+describe('life-data.write — bilinçli boşluk, gözden kaçma değil', () => {
+  it('HİÇBİR departman kullanıcı verisi yazamaz', () => {
+    // Bu ailenin tamamı (save_memory, save_goal, update_profile, toggle_habit,
+    // update_module, add_roadmap_item, add_scholarship, save_to_library)
+    // KULLANICININ KENDİ hayat verisini yazar. MAXAİ ajanları istisnasız
+    // taslak-üreticidir: çıktıları insan onayı bekleyen önerilerdir.
+    // Yazma yetkisi Sanchez'e aittir çünkü o KONUŞARAK yazar (öneri → onay).
+    for (const department of listDepartments()) {
+      expect({
+        department: department.id,
+        effect: departmentEffect(department, 'life-data.write'),
+      }).toMatchObject({ effect: 'forbidden' })
+    }
+  })
+
+  it('yaptırım çalışma zamanında da geçerli (kapı registry\'ye bağlı)', async () => {
+    const { canUseTool } = await import('./enforcement')
+    for (const agent of listAgents({ includeDeprecated: true })) {
+      const decision = canUseTool(agent.name, 'save_memory')
+      expect({ agent: agent.name, allowed: decision.allowed }).toMatchObject({ allowed: false })
+    }
+    // Sanchez muaftır — tek yazma yolu odur.
+    expect(canUseTool('sanchez', 'save_memory').allowed).toBe(true)
+  })
+})
+
+// ── brain.contribute (Paket C1 / TASK C1.3) ─────────────────────────────────
+
+describe('brain.contribute — seçili departmanlar', () => {
+  it('yalnız knowledge, builder ve operations katkı yapabilir', () => {
+    const expected: Record<string, boolean> = {
+      knowledge: true, builder: true, operations: true,
+      growth: false, creative: false, 'client-success': false, legacy: false,
+    }
+    for (const department of listDepartments()) {
+      expect({
+        department: department.id,
+        allowed: departmentEffect(department, 'brain.contribute') === 'allowed',
+      }).toMatchObject({ allowed: expected[department.id] })
+    }
+  })
+
+  it('brain.integrate KİLİDİ korunuyor — yalnız knowledge', () => {
+    // brain.contribute ayrı bir yetenektir; integrate kilidini gevşetmez.
+    for (const department of listDepartments()) {
+      const effect = departmentEffect(department, 'brain.integrate')
+      expect({ department: department.id, effect })
+        .toMatchObject({ effect: department.id === 'knowledge' ? 'allowed' : 'forbidden' })
+    }
+  })
+})
