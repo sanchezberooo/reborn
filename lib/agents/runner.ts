@@ -216,6 +216,27 @@ export async function runAgent(
       }
     }
 
+    // ── BRAIN HASADI (Paket C1) ───────────────────────────────────────────
+    // YALNIZ verify'ı GEÇEN run'ın çıktısı aday olabilir — bu yüzden burada,
+    // verify_failed dönüşünden SONRA. Kurallar lib/agents/brain-harvest.ts'te
+    // (departman yetkisi + kalite kapısı); hasat run'ı ASLA düşürmez, bu
+    // yüzden hatası yutulur ve yalnız loglanır.
+    void (async () => {
+      try {
+        const { harvestToBrain } = await import('@/lib/agents/brain-harvest-writer')
+        await harvestToBrain({
+          agentName,
+          userId,
+          output,
+          verifyPassed: true,
+          failedToolCallCount: failedToolCalls.length,
+          origin: { runId, agentName, taskId: opts.taskId },
+        })
+      } catch (err) {
+        console.error(`[Reborn] brain hasadı başarısız (${agentName}):`, err)
+      }
+    })()
+
     return { ok: true, output, runId }
 
   } catch (err) {

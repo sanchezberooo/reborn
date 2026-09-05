@@ -12,6 +12,7 @@
 import 'server-only'
 import { brainDeps, mapNodeRow, NODE_COLUMNS } from '../brain/db'
 import type { BrainNode } from '../brain/types'
+import type { AgentOutputMeta } from '../agents/brain-harvest'
 import type { ExtractionKind, ExtractionMeta, KnowledgeItemMeta, ReviewRecord } from './types'
 
 const DEFAULT_LIMIT = 25
@@ -19,7 +20,8 @@ const MAX_LIMIT = 100
 
 export interface ReviewQueueEntry {
   nodeId: string
-  entryKind: 'item' | 'extraction'
+  /** 'agent-output': ajan çıktısından hasat edilen aday (Paket C1). */
+  entryKind: 'item' | 'extraction' | 'agent-output'
   /** extraction girişlerinde tür (skill/workflow/…); item'da null. */
   extractionKind: ExtractionKind | null
   nodeType: string
@@ -64,6 +66,26 @@ function toEntry(node: BrainNode): ReviewQueueEntry | null {
       confidence: item.trustScore,
       reason: `kalite: ${item.qualityVerdict} (trust ${item.trustScore.toFixed(2)}) — ${item.category}`,
       source: item.source.url ?? item.source.type,
+      reviewer: review?.reviewer ?? null,
+      status: node.status,
+      createdAt: node.createdAt,
+    }
+  }
+  // Ajan çıktısından hasat edilen aday (Paket C1 / lib/agents/brain-harvest).
+  // Bu dal olmadan hasat edilen node'lar status='aday' olsalar bile kuyrukta
+  // GÖRÜNMEZDİ — toEntry tanımadığı zarfa null döner.
+  if (meta.kind === 'agent-output') {
+    const harvest = meta as unknown as AgentOutputMeta
+    return {
+      nodeId: node.id,
+      entryKind: 'agent-output',
+      extractionKind: null,
+      nodeType: node.type,
+      title: node.title,
+      score: harvest.trustScore,
+      confidence: harvest.trustScore,
+      reason: `ajan çıktısı: ${harvest.qualityVerdict} (trust ${harvest.trustScore.toFixed(2)}) — ${harvest.origin.agentName}`,
+      source: `run:${harvest.origin.runId}`,
       reviewer: review?.reviewer ?? null,
       status: node.status,
       createdAt: node.createdAt,

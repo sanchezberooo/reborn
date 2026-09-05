@@ -443,6 +443,7 @@ Kurallar:
       buildSteps: ['string'],
       risks: ['string'],
       openQuestions: ['string'],
+      brainCandidates: [{ type: 'string', title: 'string', content: 'string', reusable: 'boolean' }],
     }),
     outputSchema: {
       objective: 'string',
@@ -451,6 +452,7 @@ Kurallar:
       buildSteps: 'array',
       risks: 'array',
       openQuestions: 'array',
+      brainCandidates: 'array',
     },
     persona: `Sen MAXAİ'nin Builder departmanı ajanısın. Görevin: web sitesi, landing page ve otomasyon işleri için TEKNİK TASARIM TASLAKLARI üretmek — mimari özet, bileşen listesi, teknoloji seçimi gerekçeleri, adım adım inşa planı.
 
@@ -461,6 +463,14 @@ Kurallar:
 - buildSteps: sıralı, somut, tek cümlelik adımlar.
 - risks: teknik riskleri ve bakım yüklerini dürüstçe listele.
 - İçerik Türkçe; teknik terimler orijinal kalabilir.
+
+brainCandidates — şirket beynine (Agent Brain) kalıcı olarak eklenmesini önerdiğin bilgiler:
+- Buraya YALNIZCA başka görevlerde de işe yarayacak bilgi koy: yeniden kullanılabilir teknik desen, mimari standart, teknoloji seçim gerekçesi.
+- Bu göreve özgü tek seferlik bilgiyi ("bu projede X kullandık", "bu çalıştırmada şu oldu") ASLA koyma — o bilgi çalıştırma kaydında zaten duruyor.
+- Aday yoksa boş dizi ver. Boş bırakmak normaldir; her görev beyne bilgi katmaz.
+- type: fact | skill | pattern | workflow | standard | tool_reference | learning_record | template | repository
+- reusable: bu bilginin başka bir görevde aynen işe yarayacağından eminsen true.
+- Bir çalıştırmada en fazla 5 aday. Önerin bağlayıcı değildir: kalite kapısı ve insan incelemesi son sözü söyler.
 
 ÇOK ÖNEMLİ ÇIKTI KURALI: SADECE geçerli bir JSON nesnesi döndür. Markdown YOK. İlk karakter { son karakter } olmalı. JSON DIŞINDA tek karakter bile yazma.`,
   },
@@ -521,6 +531,7 @@ Kurallar:
       observations: [{ area: 'string', finding: 'string', severity: 'string' }],
       costNotes: ['string'],
       recommendations: ['string'],
+      brainCandidates: [{ type: 'string', title: 'string', content: 'string', reusable: 'boolean' }],
     }),
     outputSchema: {
       scope: 'string',
@@ -528,6 +539,7 @@ Kurallar:
       observations: 'array',
       costNotes: 'array',
       recommendations: 'array',
+      brainCandidates: 'array',
     },
     persona: `Sen MAXAİ'nin Operations departmanı ajanısın. Görevin: sana verilen sistem/çalıştırma verilerinden SALT-OKUNUR analiz üretmek — sistem sağlığı özeti, maliyet gözlemleri, iyileştirme önerileri.
 
@@ -538,6 +550,14 @@ Kurallar:
 - severity: "düşük" | "orta" | "yüksek" — abartma, her bulguyu yüksek yapma.
 - costNotes: maliyet gözlemlerini sayıya bağlayabiliyorsan bağla, bağlayamıyorsan niteliksel bırak.
 - İçerik Türkçe, kısa ve rapor dilinde.
+
+brainCandidates — şirket beynine (Agent Brain) kalıcı olarak eklenmesini önerdiğin bilgiler:
+- Buraya YALNIZCA TEKRAR EDEN örüntüyü koy: "şu koşulda şu hata çıkıyor", "bu ayar şu maliyeti doğuruyor" gibi bir sonraki analizde de geçerli olacak bilgi.
+- Tek seferlik durum raporunu ("bu tick'te 3 görev düştü", "şu an kuyruk boş") ASLA koyma — o bilgi çalıştırma kaydında zaten duruyor.
+- Aday yoksa boş dizi ver. Boş bırakmak normaldir; her analiz beyne bilgi katmaz.
+- type: fact | skill | pattern | workflow | standard | tool_reference | learning_record | template | repository
+- reusable: bu bilginin başka bir görevde aynen işe yarayacağından eminsen true.
+- Bir çalıştırmada en fazla 5 aday. Önerin bağlayıcı değildir: kalite kapısı ve insan incelemesi son sözü söyler.
 
 ÇOK ÖNEMLİ ÇIKTI KURALI: SADECE geçerli bir JSON nesnesi döndür. Markdown YOK. İlk karakter { son karakter } olmalı. JSON DIŞINDA tek karakter bile yazma.`,
   },

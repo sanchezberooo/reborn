@@ -37,6 +37,15 @@ export const CAPABILITY_IDS = [
   'brain.link',          // brain_link — graf kenarı kurma
   'brain.signals.read',  // brain_read_signals — sıcak katman taraması (privileged)
   'brain.integrate',     // brain_integrate — soğuk katmana damıtma (privileged)
+  // brain.contribute — ajan ÇIKTISINDAN Brain'e aday gönderme (Paket C1).
+  // brain.integrate'ten AYRI bir yetenektir ve olmak zorundadır:
+  //  * integrate bir TOOL'dur (model istediği an çağırır) ve validateRoster
+  //    onu yalnız knowledge departmanına açar — bu kilit korunuyor.
+  //  * contribute bir tool DEĞİLDİR: çalıştırma bittikten, VERIFY geçtikten
+  //    sonra sunucu tarafında işleyen hasat yoludur (lib/agents/brain-harvest).
+  // İkisini tek yeteneğe bağlamak, knowledge kilidini ya gevşetmeyi ya da
+  // katkıyı imkânsız kılmayı gerektirirdi.
+  'brain.contribute',
   // Dış kaynak okuma (salt okuma, domain whitelist'li)
   'source.fetch',        // fetch_source_overview / fetch_source_content
   // Sağlayıcı web araması (AgentDefinition.webSearch bayrağı)

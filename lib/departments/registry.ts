@@ -58,6 +58,33 @@ export const TOOL_CAPABILITIES: Record<string, CapabilityId> = {
 // permissions default-deny'dir: listede 'allowed' olmayan yetenek yasak.
 // Mevcut roster davranışı birebir kodlanmıştır — hiçbir ajanın fiili tool
 // listesi değişmez; bu tablo o listelerin artık İLKE olarak yaşadığı yerdir.
+//
+// ── life-data.write NEDEN HİÇBİR DEPARTMANDA YOK (Paket C1 / TASK C1.4) ────
+// Bu bir gözden kaçma DEĞİL, bilinçli boşluktur — bir sonraki okuyan aynı
+// soruyu sormasın diye burada duruyor.
+//
+// life-data.write ailesi (save_memory, save_goal, update_profile,
+// toggle_habit, update_module, add_roadmap_item, add_scholarship,
+// save_to_library) KULLANICININ KENDİ HAYAT VERİSİNİ yazar: hedefleri,
+// alışkanlıkları, profili, günlüğü. Reborn'un değişmez filtresi "kontrol ve
+// güven kullanıcıda" ve tek muhatap ilkesi birlikte şunu söyler: bu veriyi
+// yazma yetkisi Sanchez'e aittir (enforcement muafiyeti), çünkü Sanchez
+// kullanıcıyla KONUŞARAK yazar — öneri getirir, onay alır, sonra yazar.
+//
+// MAXAİ ajanları ise istisnasız TASLAK ÜRETİCİDİR (registry.ts roster notu):
+// çıktıları insan onayı bekleyen önerilerdir, doğrudan uygulanan eylemler
+// değil. Bir ajana life-data.write vermek, kullanıcıya sormadan onun
+// hedefini/alışkanlığını değiştirebilmesi demektir — taslak-üretici
+// sözleşmesinin ihlali.
+//
+// Paket C1'den sonra da hiçbir ajanın buna ihtiyacı YOK: Brain'e katkı yolu
+// life-data.write'tan geçmiyor (o Personal Brain silo tablolarıdır);
+// katkı Agent Brain'e brain.contribute ile yapılıyor ve oradaki her kayıt
+// status='aday' karantinasında doğuyor.
+//
+// AÇILMASI GEREKİRSE: önce onay katmanı gelmeli (external.* yeteneklerinin
+// bekleyişiyle aynı gerekçe) — 'approval-required' etkisi tam da bunun için
+// sözlükte duruyor ve v1'de hiçbir permission onu kullanmıyor.
 export const DEPARTMENTS: Record<DepartmentId, Department> = {
   knowledge: {
     id: 'knowledge',
@@ -77,6 +104,8 @@ export const DEPARTMENTS: Record<DepartmentId, Department> = {
       { capability: 'brain.signals.read', effect: 'allowed' },
       { capability: 'brain.integrate', effect: 'allowed' },
       { capability: 'source.fetch', effect: 'allowed' },
+      // Brain'in bekçisi zaten burası — hasat yolu da açık (Paket C1).
+      { capability: 'brain.contribute', effect: 'allowed' },
     ],
   },
   growth: {
@@ -129,6 +158,12 @@ export const DEPARTMENTS: Record<DepartmentId, Department> = {
       { capability: 'brain.read', effect: 'allowed' },
       { capability: 'brain.link', effect: 'allowed' },
       { capability: 'tasks.delegate', effect: 'allowed' },
+      // Katkı yetkisi (Paket C1): teknik desen, mimari standart ve teknoloji
+      // gerekçesi TEKRAR KULLANILABİLİR bilgidir — bir sonraki inşa işinde
+      // aynen işe yarar. growth/creative/client-success'e verilmedi: onların
+      // çıktısı kampanya, içerik ve müşteriye özel rapordur; tek seferliktir
+      // ve Brain'i şişirir.
+      { capability: 'brain.contribute', effect: 'allowed' },
     ],
   },
   'client-success': {
@@ -163,6 +198,11 @@ export const DEPARTMENTS: Record<DepartmentId, Department> = {
       { capability: 'brain.read', effect: 'allowed' },
       { capability: 'brain.link', effect: 'allowed' },
       { capability: 'tasks.delegate', effect: 'allowed' },
+      // Katkı yetkisi (Paket C1): sistemde tekrar eden ÖRÜNTÜ ("şu koşulda
+      // şu hata çıkıyor", "bu ayar şu maliyeti doğuruyor") kalıcı bilgidir.
+      // Tek seferlik durum raporu ("bu tick'te 3 görev düştü") kalite
+      // kapısının yeniden-kullanılabilirlik testinde zaten elenir.
+      { capability: 'brain.contribute', effect: 'allowed' },
     ],
   },
   legacy: {
