@@ -27,6 +27,10 @@ export interface ToolExecutionContext {
   callerAgent?: string
   /** Çağıran bir iş emri (agent task) bağlamında koşuyorsa o görevin id'si. */
   taskId?: string
+  /** Çağrı bir ajan çalıştırması içindeyse o run'ın id'si — denetim satırı
+   *  run'a bağlanır (migration 0014, görünürlük ucu). Model girdisinden
+   *  DEĞİL, çağıran koddan (runner) gelir. */
+  runId?: string
 }
 
 /**
@@ -52,6 +56,7 @@ export async function serverExecuteTool(
     userId,
     agentName: ctx.callerAgent ?? null,
     department: decision.department,
+    runId: ctx.runId ?? null,
     toolName: name,
     capability: decision.capability,
     inputKeys: auditInputKeys(input),

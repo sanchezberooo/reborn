@@ -145,6 +145,7 @@ export async function runAgent(
           const result = await runToolCall(tu, userId, {
             callerAgent: agentName,
             taskId: opts.taskId,
+            runId,
           })
           if (result.isError) {
             failedToolCalls.push({ name: tu.name, message: result.content })

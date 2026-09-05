@@ -18,6 +18,10 @@ export interface AuditEntry {
   userId?: string | null
   agentName?: string | null
   department?: string | null
+  /** Çağrı bir ajan çalıştırması içinde yapıldıysa o run'ın id'si
+   *  (migration 0014). Sanchez'in sohbet içi çağrılarında null — onların
+   *  agent_runs satırı yoktur. */
+  runId?: string | null
   toolName: string
   status: AuditStatus
   /** Çözülen yetenek; tool yetenek sözlüğünde eşlenmemişse null. */
@@ -106,6 +110,7 @@ export async function writeAuditLog(entry: AuditEntry): Promise<void> {
       user_id: entry.userId ?? null,
       agent_name: entry.agentName ?? null,
       department: entry.department ?? null,
+      run_id: entry.runId ?? null,
       tool_name: entry.toolName,
       status: entry.status,
       capability: entry.capability ?? null,
