@@ -103,6 +103,89 @@ describe('yeni departman rosteri — kayıt bütünlüğü', () => {
   })
 })
 
+// ── outputSchema yayılımı (Paket C1 / TASK C1.2) ────────────────────────────
+
+/** Şema beyan eden odak ajanlar. Diğer 9'a (legacy raf + tool'suz kabuklar)
+ *  BİLİNÇLİ dokunulmadı — şema, çıktısı gerçekten sabit olan ajanlara yazılır. */
+const SCHEMA_AGENTS = [
+  'knowledge-agent',
+  'growth-agent',
+  'builder-agent',
+  'client-success-agent',
+  'operations-agent',
+] as const
+
+describe('outputSchema — odak ajanlar', () => {
+  it('beş odak ajanın hepsi şema beyan eder', () => {
+    for (const name of SCHEMA_AGENTS) {
+      expect({ name, hasSchema: Boolean(getAgent(name)?.outputSchema) })
+        .toMatchObject({ hasSchema: true })
+    }
+  })
+
+  it('şema outputContract\'ın üst seviye alanlarıyla BİREBİR örtüşür', () => {
+    // Sözleşme (düzyazı) ile şema (makine) ayrışırsa VERIFY yanlış şeyi
+    // doğrular — bu test o ayrışmayı yakalar.
+    for (const name of SCHEMA_AGENTS) {
+      const agent = getAgent(name)!
+      const schema = agent.outputSchema!
+      const shapes = Array.isArray(schema) ? schema : [schema]
+
+      let contract: Record<string, unknown>
+      try {
+        contract = JSON.parse(agent.outputContract) as Record<string, unknown>
+      } catch {
+        continue // düzyazı sözleşme (test-agent deseni) — karşılaştırılamaz
+      }
+
+      // Alternatif şekillerden EN AZ BİRİ sözleşmenin alan kümesiyle eşleşmeli
+      // (knowledge-agent'ın rapor modu sözleşmede düzyazı olarak anlatılır).
+      const contractFields = Object.keys(contract).sort()
+      const matches = shapes.some(
+        (shape) => JSON.stringify(Object.keys(shape).sort()) === JSON.stringify(contractFields),
+      )
+      expect({ agent: name, contractFields, matches }).toMatchObject({ matches: true })
+    }
+  })
+
+  it('şema tipleri sözleşmedeki değer şekliyle tutarlı (dizi↔array, nesne↔object)', () => {
+    for (const name of SCHEMA_AGENTS) {
+      const agent = getAgent(name)!
+      const shapes = Array.isArray(agent.outputSchema!) ? agent.outputSchema! : [agent.outputSchema!]
+      let contract: Record<string, unknown>
+      try {
+        contract = JSON.parse(agent.outputContract) as Record<string, unknown>
+      } catch {
+        continue
+      }
+      const shape = shapes.find(
+        (s) => JSON.stringify(Object.keys(s).sort()) === JSON.stringify(Object.keys(contract).sort()),
+      )
+      if (!shape) continue
+
+      for (const [field, declared] of Object.entries(shape)) {
+        const sample = contract[field]
+        const expected = Array.isArray(sample) ? 'array'
+          : sample !== null && typeof sample === 'object' ? 'object'
+          : sample === 'number' ? 'number'
+          : sample === 'boolean' ? 'boolean'
+          : 'string'
+        expect({ agent: name, field, declared, expected }).toMatchObject({ declared: expected })
+      }
+    }
+  })
+
+  it('şemasız ajanlara dokunulmadı (legacy raf + kabuklar)', () => {
+    for (const name of DEPRECATED_AGENTS) {
+      expect({ name, schema: getAgent(name)?.outputSchema }).toMatchObject({ schema: undefined })
+    }
+    expect(getAgent('test-agent')?.outputSchema).toBeUndefined()
+    // creative-agent bilinçli dışarıda: içerik taslağı üretir, C1.2 kapsamı
+    // beş odak ajandır.
+    expect(getAgent('creative-agent')?.outputSchema).toBeUndefined()
+  })
+})
+
 describe.skipIf(!hasEnv)('yeni ajan runner üzerinden uçtan uca (MockProvider + canlı Supabase)', () => {
   async function adminApi() {
     const { getSupabaseAdmin } = await import('../supabase-admin')

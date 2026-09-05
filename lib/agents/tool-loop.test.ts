@@ -113,7 +113,21 @@ describe.skipIf(!hasEnv)('runAgent — hatalı tool çağrısı run\'ı düşür
             for (const m of req.messages as { role: string; results?: typeof seenToolResults }[]) {
               if (m.role === 'tool_results' && m.results) seenToolResults.push(...m.results)
             }
-            return { stopReason: 'end_turn', text: '{"objective":"devam ettim"}', toolUses: [] }
+            // Çıktı growth-agent'ın ŞEMASINI tutmalı (Paket C1.2): burada
+            // sınanan şey tool hatasının run'ı düşürmediğidir, şema ihlali
+            // değil — sözleşmeye uymayan çıktı testi yanlış sebepten kırardı.
+            return {
+              stopReason: 'end_turn',
+              text: JSON.stringify({
+                objective: 'devam ettim',
+                strategySummary: 'tool hatasına rağmen tamamlandı',
+                tactics: [],
+                drafts: [],
+                metricsToWatch: [],
+                assumptions: [],
+              }),
+              toolUses: [],
+            }
           },
           stream: actual.getAIProvider().stream,
           embed: async () => [],
@@ -127,7 +141,7 @@ describe.skipIf(!hasEnv)('runAgent — hatalı tool çağrısı run\'ı düşür
     // Run DÜŞMEDİ — B1.2 öncesi burası ok:false + status 'error' olurdu.
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.output).toEqual({ objective: 'devam ettim' })
+    expect(result.output).toMatchObject({ objective: 'devam ettim' })
 
     // Model hatayı GÖRDÜ:
     expect(seenToolResults).toHaveLength(1)

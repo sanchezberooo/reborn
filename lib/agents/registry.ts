@@ -376,6 +376,16 @@ Dil: eleştiriler Türkçe, taslaktan alıntılar orijinal dilinde (İngilizce).
       metricsToWatch: ['string'],
       assumptions: ['string'],
     }),
+    // VERIFY şeması — outputContract'ın üst seviye alanlarıyla birebir
+    // (iç içe doğrulama yok: eleman şekli sözleşmenin düzyazı tarafında kalır).
+    outputSchema: {
+      objective: 'string',
+      strategySummary: 'string',
+      tactics: 'array',
+      drafts: 'array',
+      metricsToWatch: 'array',
+      assumptions: 'array',
+    },
     persona: `Sen MAXAİ'nin Growth departmanı ajanısın. Görevin: verilen hedef/ürün için reklam, SEO ve dönüşüm (conversion) stratejisi ile ilgili TASLAKLAR üretmek — kampanya fikirleri, reklam metni taslakları, anahtar kelime önerileri, dönüşüm iyileştirme önerileri. Gerekirse web araması yaparak güncel bilgiye dayan.
 
 MUTLAK SINIR: SADECE taslak ve öneri üretirsin. Dış dünyaya HİÇBİR eylem yapmazsın — hiçbir şey yayınlamazsın, hiçbir kampanya başlatmazsın, hiçbir bütçe harcamazsın, kimseye mesaj göndermezsin. Çıktın her zaman insan onayı bekleyen bir öneridir.
@@ -434,6 +444,14 @@ Kurallar:
       risks: ['string'],
       openQuestions: ['string'],
     }),
+    outputSchema: {
+      objective: 'string',
+      designSummary: 'string',
+      components: 'array',
+      buildSteps: 'array',
+      risks: 'array',
+      openQuestions: 'array',
+    },
     persona: `Sen MAXAİ'nin Builder departmanı ajanısın. Görevin: web sitesi, landing page ve otomasyon işleri için TEKNİK TASARIM TASLAKLARI üretmek — mimari özet, bileşen listesi, teknoloji seçimi gerekçeleri, adım adım inşa planı.
 
 MUTLAK SINIR: SADECE tasarım ve taslak üretirsin. Dış dünyaya HİÇBİR eylem yapmazsın — hiçbir şey deploy etmezsin, kod çalıştırmazsın, servis satın almazsın, harcama yapmazsın. Çıktın her zaman insan onayı bekleyen bir öneridir.
@@ -467,6 +485,14 @@ Kurallar:
       reportDraft: 'string',
       clarifyingQuestions: ['string'],
     }),
+    // objective iç içe bir nesnedir: şema onu 'object' olarak doğrular,
+    // alt alanları (title/desiredOutcome/…) sözleşmenin düzyazı tarafında kalır.
+    outputSchema: {
+      clientRequest: 'string',
+      objective: 'object',
+      reportDraft: 'string',
+      clarifyingQuestions: 'array',
+    },
     persona: `Sen MAXAİ'nin Client Success departmanı ajanısın. Görevin: serbest metinle gelen müşteri isteğini yapılandırılmış bir Objective'e çevirmek ve müşteriye sunulacak rapor TASLAĞI hazırlamak.
 
 MUTLAK SINIR: SADECE taslak üretirsin. Dış dünyaya HİÇBİR eylem yapmazsın — müşteriye hiçbir şey göndermezsin, mesaj atmazsın, söz vermezsin, harcama yapmazsın. Raporun taslaktır; gönderim kararı ve gönderim insanındır.
@@ -496,6 +522,13 @@ Kurallar:
       costNotes: ['string'],
       recommendations: ['string'],
     }),
+    outputSchema: {
+      scope: 'string',
+      healthSummary: 'string',
+      observations: 'array',
+      costNotes: 'array',
+      recommendations: 'array',
+    },
     persona: `Sen MAXAİ'nin Operations departmanı ajanısın. Görevin: sana verilen sistem/çalıştırma verilerinden SALT-OKUNUR analiz üretmek — sistem sağlığı özeti, maliyet gözlemleri, iyileştirme önerileri.
 
 MUTLAK SINIR: SADECE analiz ve öneri üretirsin. HİÇBİR sistemi değiştirmezsin, yeniden başlatmazsın, konfigürasyon güncellemezsin, servis açıp kapamazsın, harcama yapmazsın, kimseye mesaj göndermezsin. Önerilerin insan onayı bekleyen tekliflerdir.

@@ -85,7 +85,11 @@ describe.skipIf(!hasEnv)('GET /api/agents/runs (canlı Supabase)', () => {
   afterAll(cleanup)
 
   it('liste: mevcut alanlar KORUNUR (UI kırılmaz) ve yeni alanlar eklenir', async () => {
-    const res = await GET(new Request('http://localhost/api/agents/runs?agent=growth-agent'))
+    // limit=100: growth-agent'ı başka test dosyaları da (verify, roster,
+    // tool-loop) eşzamanlı çalıştırıyor; varsayılan 20'lik pencere paylaşımlı
+    // olduğu için bu run'ı dışarıda bırakabiliyordu. Pencere genişletildi —
+    // doğrulanan alanlar aynı.
+    const res = await GET(new Request('http://localhost/api/agents/runs?agent=growth-agent&limit=100'))
     expect(res.status).toBe(200)
     const rows = (await res.json()) as Json[]
 
