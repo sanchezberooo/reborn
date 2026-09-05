@@ -18,12 +18,18 @@ jobs:
           node-version: 20
           cache: npm
 
-      # npm ci reddediyor: package-lock.json'daki bazı optional dependency
-      # girdileri (@emnapi/* — bge-m3'ün ONNX runtime'ının Linux'a özgü WASM
-      # fallback'i) yalnızca Linux'ta gerekiyor ve Windows'ta üretilen lock
-      # dosyasında eksik. npm install lockfile'ı gerektiği gibi tamamlar;
-      # hiçbir dependency versiyonu veya uygulama kodu değişmiyor.
-      - run: npm install
+      # npm ci: lockfile'a BİREBİR sadık kurulum — reprodüksiyon garantisi
+      # buna bağlı (npm install lockfile'ı sessizce tamamlayabilir).
+      #
+      # Eskiden npm install kullanılıyordu çünkü lockfile Windows'ta
+      # üretilmişti ve Linux'a özgü optional dependency'ler eksikti. Dosya
+      # bir kez GERÇEK Linux'ta (geçici relock iş akışı, ubuntu-latest)
+      # `npm install --package-lock-only` ile tamamlandı: 8 girdi eklendi
+      # (@emnapi/* ve @napi-rs/wasm-runtime'ın wasm32-wasi zincirleri),
+      # hiçbir paket silinmedi, hiçbir sürüm/resolved/integrity değişmedi.
+      # Lockfile'ı Windows'ta yeniden üretmek bu girdileri TEKRAR düşürür —
+      # relock her zaman Linux'ta yapılmalı.
+      - run: npm ci
 
       - run: npm test
 
